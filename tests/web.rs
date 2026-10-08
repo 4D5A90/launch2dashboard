@@ -662,3 +662,35 @@ async fn open_streams_end_when_shutdown_is_requested() {
         assert!(end.unwrap().is_none(), "{path} still open after shutdown");
     }
 }
+
+#[tokio::test]
+async fn every_response_except_versioned_icons_is_never_cached() {
+    let app = router(Arc::new(FakeManager::new()), icons(), Shutdown::never());
+    let mut paths = vec![
+        "/",
+        "/services/example",
+        "/static/app.js",
+        "/api/services",
+        "/api/services/example",
+        "/api/services/example/status",
+        "/api/services/example/logs",
+        "/api/services/example/logs/stream",
+        "/api/services/example/icon",
+        "/nope",
+    ];
+    if cfg!(debug_assertions) {
+        paths.push("/dev/reload");
+    }
+    for path in paths {
+        let response = app
+            .clone()
+            .oneshot(request("GET", path, None))
+            .await
+            .unwrap();
+        assert_eq!(response.headers()["cache-control"], "no-store", "{path}");
+        let policy = response.headers()["content-security-policy"]
+            .to_str()
+            .unwrap();
+        assert!(policy.contains("frame-ancestors 'none'"), "{path}");
+    }
+}

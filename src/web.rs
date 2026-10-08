@@ -4,7 +4,7 @@ use crate::domain::{
 };
 use askama::Template;
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     body::Bytes,
     extract::{DefaultBodyLimit, Path, Request, State},
     http::{HeaderValue, Method, StatusCode, header},
@@ -126,21 +126,25 @@ async fn local_requests_only(request: Request, next: Next) -> Response {
             .into_response();
     }
     let mut response = next.run(request).await;
+    let own_policy = response.extensions().get::<OwnPolicy>().is_some();
     let headers = response.headers_mut();
-    // Handlers may set a stricter policy or cache rule of their own (see `icon`).
-    headers.entry(header::CONTENT_SECURITY_POLICY).or_insert(HeaderValue::from_static(
+    if !own_policy {
+        headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-    ));
+        ));
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    }
     headers.insert(
         "x-content-type-options",
         HeaderValue::from_static("nosniff"),
     );
     headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
-    headers
-        .entry(header::CACHE_CONTROL)
-        .or_insert(HeaderValue::from_static("no-store"));
     response
 }
+
+/// Marks a response that sets its own CSP and cache policy instead of the global ones.
+#[derive(Clone, Copy)]
+struct OwnPolicy;
 
 struct HttpError(AppError);
 
@@ -311,6 +315,7 @@ async fn icon(
     })
     .await?;
     Ok((
+        Extension(OwnPolicy),
         [
             (header::CONTENT_TYPE, icon.format().media_type()),
             // An SVG opened directly must not run anything in the dashboard origin.
