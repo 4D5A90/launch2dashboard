@@ -6,7 +6,7 @@ use std::{
     os::unix::fs::OpenOptionsExt,
     path::Path,
 };
-pub(super) fn safe_directory(path: &Path) -> Result<(), AppError> {
+pub(crate) fn safe_directory(path: &Path) -> Result<(), AppError> {
     for ancestor in path.ancestors() {
         if let Ok(m) = fs::symlink_metadata(ancestor)
             && m.file_type().is_symlink()
@@ -26,7 +26,7 @@ pub(super) fn safe_directory(path: &Path) -> Result<(), AppError> {
     }
     Ok(())
 }
-pub(super) fn safe_regular(path: &Path, missing_ok: bool) -> Result<(), AppError> {
+pub(crate) fn safe_regular(path: &Path, missing_ok: bool) -> Result<(), AppError> {
     match fs::symlink_metadata(path) {
         Ok(m) if m.is_file() && !m.file_type().is_symlink() => Ok(()),
         Ok(_) => Err(AppError::new(
@@ -51,14 +51,14 @@ fn no_follow() -> i32 {
         0x20000
     }
 }
-pub(super) fn open_read(path: &Path) -> std::io::Result<File> {
+pub(crate) fn open_read(path: &Path) -> std::io::Result<File> {
     OpenOptions::new()
         .read(true)
         .custom_flags(no_follow())
         .open(path)
 }
 /// Creates `path` as a private (0600) regular file if missing.
-pub(super) fn touch_private(path: &Path) -> Result<(), AppError> {
+pub(crate) fn touch_private(path: &Path) -> Result<(), AppError> {
     safe_regular(path, true)?;
     OpenOptions::new()
         .create(true)
@@ -69,7 +69,7 @@ pub(super) fn touch_private(path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 /// Atomically replaces `path` with a private file filled by `fill`, via `temp` in the same directory.
-pub(super) fn replace_private(
+pub(crate) fn replace_private(
     path: &Path,
     temp: &Path,
     fill: impl FnOnce(&mut File) -> Result<(), AppError>,
@@ -92,7 +92,7 @@ pub(super) fn replace_private(
     result
 }
 /// Returns at most the last `max_bytes` of `path`, or an empty string if it does not exist.
-pub(super) fn tail(path: &Path, max_bytes: u64) -> Result<String, AppError> {
+pub(crate) fn tail(path: &Path, max_bytes: u64) -> Result<String, AppError> {
     safe_regular(path, true)?;
     let mut f = match open_read(path) {
         Ok(f) => f,

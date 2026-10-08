@@ -1,6 +1,5 @@
 mod definition;
 mod executor;
-mod secure_fs;
 mod session;
 mod status;
 #[cfg(test)]
@@ -9,9 +8,9 @@ mod testing;
 mod tests;
 
 use crate::domain::*;
+use crate::secure_fs::{self, open_read, safe_directory, safe_regular};
 use executor::{Executor, ProcessExecutor};
 use plist::{Dictionary, Value};
-use secure_fs::{open_read, safe_directory, safe_regular};
 use session::LaunchDomain;
 use status::JobStatus;
 use std::{fs, path::PathBuf, sync::Arc};
