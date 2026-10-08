@@ -1,224 +1,188 @@
 <!doctype html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Services · L2D</title>
     <link rel="stylesheet" href="/static/style.css" />
     <script src="/static/app.js" defer></script>
-  </head>
-  <body data-selected-id="{{ selected_id }}">
+</head>
+
+<body data-selected-id="{{ selected_id }}">
     <a class="skip-link" href="#main">Skip to services</a>
     <aside class="sidebar">
-      <a class="brand" href="/" aria-label="L2D home">
-        <svg viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M4 8 19 16 20 34 25 20 37 8 24 12 20 19 16 12Z" fill="currentColor" />
-        </svg>
-        <span>
-          <strong>L2D</strong>
-          <small>Services control</small>
-        </span>
-      </a>
-      <a class="nav-link active" href="/">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3" y="4" width="18" height="6" rx="2" />
-          <rect x="3" y="14" width="18" height="6" rx="2" />
-          <path d="M7 7h.01M7 17h.01M12 7h5M12 17h5" />
-        </svg>
-        Services
-      </a>
-      <div class="sidebar-label">YOUR SERVICES</div>
-      <nav id="service-nav" aria-label="Your services"></nav>
-      <div class="local-host">
-        <span class="host-icon">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="13" rx="2" />
-            <path d="M8 21h8M12 17v4" />
-          </svg>
-        </span>
-        <span>
-          <strong>This Mac</strong>
-          <small>127.0.0.1 · local only</small>
-        </span>
-      </div>
-      <div class="sidebar-footer">
-        <span class="dot running"></span>
-        Managed by launchd
-      </div>
+        <a class="brand" href="/" aria-label="L2D home">
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+                <path d="M4 8 19 16 20 34 25 20 37 8 24 12 20 19 16 12Z" fill="currentColor" />
+            </svg>
+            <span>
+                <strong>L2D</strong>
+                <small>Services control</small>
+            </span>
+        </a>
+        <a class="nav-link active" href="/">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="6" rx="2" />
+                <rect x="3" y="14" width="18" height="6" rx="2" />
+                <path d="M7 7h.01M7 17h.01M12 7h5M12 17h5" />
+            </svg>
+            Services
+        </a>
+        <div class="sidebar-label">YOUR SERVICES</div>
+        <nav id="service-nav" aria-label="Your services"></nav>
     </aside>
     <main id="main">
-      <header class="page-header">
-        <div>
-          <h1>Services</h1>
-          <p>Manage your services. Keep everything running.</p>
+        <header class="page-header">
+            <div>
+                <h1>Services</h1>
+                <p>Manage your services. Keep everything running.</p>
+            </div>
+            <div class="header-actions">
+                <label class="search">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="10" cy="10" r="6" />
+                        <path d="m15 15 5 5" />
+                    </svg>
+                    <input id="search" type="search" placeholder="Search services…" aria-label="Search services" />
+                </label>
+                <button class="primary" data-action="create">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Add Service
+                </button>
+            </div>
+        </header>
+        <div class="toolbar">
+            <div id="filters" class="filters" aria-label="Filter services">
+                <button class="filter selected" data-filter="all" aria-pressed="true">
+                    All
+                    <span id="count-all">0</span>
+                </button>
+                <button class="filter" data-filter="running" aria-pressed="false">
+                    <i class="dot running"></i>
+                    Running
+                    <span id="count-running">0</span>
+                </button>
+                <button class="filter" data-filter="stopped" aria-pressed="false">
+                    <i class="dot stopped"></i>
+                    Stopped
+                    <span id="count-stopped">0</span>
+                </button>
+                <button class="filter" data-filter="error" aria-pressed="false">
+                    <i class="dot error"></i>
+                    Error
+                    <span id="count-error">0</span>
+                </button>
+            </div>
+            <span class="refresh-status" id="refresh-status">Connecting…</span>
         </div>
-        <div class="header-actions">
-          <label class="search">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="10" cy="10" r="6" />
-              <path d="m15 15 5 5" />
-            </svg>
-            <input
-              id="search"
-              type="search"
-              placeholder="Search services…"
-              aria-label="Search services"
-            />
-          </label>
-          <button class="primary" data-action="create">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            Add Service
-          </button>
+        <div id="page-error" class="error-banner" role="alert" hidden></div>
+        <div class="workspace">
+            <section class="service-list" id="service-list" aria-label="Services" aria-busy="true">
+                {% for service in services %}
+                <article class="service-card">
+                    <h2>
+                        <a href="/services/{{ service.config.id }}">{{ service.config.id }}</a>
+                    </h2>
+                    <p class="command">{{ service.config.executable }}</p>
+                </article>
+                {% endfor %}
+                <noscript>
+                    <p>Enable JavaScript to manage services and view live status.</p>
+                </noscript>
+            </section>
+            <aside class="detail" id="detail" aria-label="Selected service">
+                <div class="detail-placeholder">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="3" y="4" width="18" height="6" rx="2" />
+                        <rect x="3" y="14" width="18" height="6" rx="2" />
+                        <path d="M7 7h.01M7 17h.01M12 7h5M12 17h5" />
+                    </svg>
+                    <h2>A closer look</h2>
+                    <p>Select a service to inspect its configuration, status and live logs.</p>
+                </div>
+            </aside>
         </div>
-      </header>
-      <div class="toolbar">
-        <div id="filters" class="filters" aria-label="Filter services">
-          <button class="filter selected" data-filter="all" aria-pressed="true">
-            All
-            <span id="count-all">0</span>
-          </button>
-          <button class="filter" data-filter="running" aria-pressed="false">
-            <i class="dot running"></i>
-            Running
-            <span id="count-running">0</span>
-          </button>
-          <button class="filter" data-filter="stopped" aria-pressed="false">
-            <i class="dot stopped"></i>
-            Stopped
-            <span id="count-stopped">0</span>
-          </button>
-          <button class="filter" data-filter="error" aria-pressed="false">
-            <i class="dot error"></i>
-            Error
-            <span id="count-error">0</span>
-          </button>
-        </div>
-        <span class="refresh-status" id="refresh-status">Connecting…</span>
-      </div>
-      <div id="page-error" class="error-banner" role="alert" hidden></div>
-      <div class="workspace">
-        <section class="service-list" id="service-list" aria-label="Services" aria-busy="true">
-          {% for service in services %}
-          <article class="service-card">
-            <h2>
-              <a href="/services/{{ service.config.id }}">{{ service.config.id }}</a>
-            </h2>
-            <p class="command">{{ service.config.executable }}</p>
-          </article>
-          {% endfor %}
-          <noscript>
-            <p>Enable JavaScript to manage services and view live status.</p>
-          </noscript>
-        </section>
-        <aside class="detail" id="detail" aria-label="Selected service">
-          <div class="detail-placeholder">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="6" rx="2" />
-              <rect x="3" y="14" width="18" height="6" rx="2" />
-              <path d="M7 7h.01M7 17h.01M12 7h5M12 17h5" />
-            </svg>
-            <h2>A closer look</h2>
-            <p>Select a service to inspect its configuration, status and live logs.</p>
-          </div>
-        </aside>
-      </div>
-      <footer class="main-footer">
-        <span>L2D</span>
-        <span>Local services. One place.</span>
-      </footer>
+        
     </main>
     <dialog id="service-dialog" aria-labelledby="form-title">
-      <form id="service-form">
-        <div class="dialog-heading">
-          <div>
-            <h2 id="form-title">Create service</h2>
-            <p>Run an executable with launchd on this Mac.</p>
-          </div>
-          <button
-            type="button"
-            class="icon-button"
-            data-action="close-form"
-            aria-label="Close dialog"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-          </button>
-        </div>
-        <div class="form-fields">
-          <label>
-            Name
-            <input
-              name="id"
-              required
-              pattern="[A-Za-z0-9][A-Za-z0-9_\-]*"
-              maxlength="100"
-              placeholder="my-service"
-              aria-describedby="name-help"
-            />
-          </label>
-          <small id="name-help">
-            Saved as launch2dashboard.&lt;name&gt;. Use letters, numbers, hyphens or underscores.
-          </small>
-          <label>
-            Executable
-            <input name="executable" required placeholder="/absolute/path/to/executable" />
-          </label>
-          <label>
-            Arguments
-            <textarea
-              name="arguments"
-              rows="3"
-              placeholder="--port&#10;8080"
-              aria-describedby="args-help"
-            ></textarea>
-          </label>
-          <small id="args-help">One argument per line. No shell quoting or expansion.</small>
-          <label>
-            Working directory
-            <span class="optional">optional</span>
-            <input name="working_directory" placeholder="/absolute/path/to/directory" />
-          </label>
-          <label>
-            Environment
-            <span class="optional">optional</span>
-            <textarea
-              name="environment"
-              rows="3"
-              placeholder="KEY=value"
-              aria-describedby="env-help"
-            ></textarea>
-          </label>
-          <small id="env-help">One KEY=value pair per line. Each key must be unique.</small>
-          <label class="checkbox">
-            <input type="checkbox" name="autostart" checked />
-            Start automatically
-          </label>
-          <label class="checkbox">
-            <input type="checkbox" name="restart_on_failure" />
-            Restart on failure
-          </label>
-          <small>Restart on failure also requires starting automatically.</small>
-          <div id="form-error" class="error-banner" role="alert" hidden></div>
-        </div>
-        <div class="dialog-footer">
-          <button type="button" data-action="close-form">Cancel</button>
-          <button type="submit" class="primary" id="save-service">Create service</button>
-        </div>
-      </form>
+        <form id="service-form">
+            <div class="dialog-heading">
+                <div>
+                    <h2 id="form-title">Create service</h2>
+                    <p>Run an executable with launchd on this Mac.</p>
+                </div>
+                <button type="button" class="icon-button" data-action="close-form" aria-label="Close dialog">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 6 12 12M18 6 6 18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="form-fields">
+                <label>
+                    Name
+                    <input name="id" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" maxlength="100"
+                        placeholder="my-service" aria-describedby="name-help" />
+                </label>
+                <small id="name-help">
+                    Saved as launch2dashboard.&lt;name&gt;. Use letters, numbers, hyphens or underscores.
+                </small>
+                <label>
+                    Executable
+                    <input name="executable" required placeholder="/absolute/path/to/executable" />
+                </label>
+                <label>
+                    Arguments
+                    <textarea name="arguments" rows="3" placeholder="--port&#10;8080"
+                        aria-describedby="args-help"></textarea>
+                </label>
+                <small id="args-help">One argument per line. No shell quoting or expansion.</small>
+                <label>
+                    Working directory
+                    <span class="optional">optional</span>
+                    <input name="working_directory" placeholder="/absolute/path/to/directory" />
+                </label>
+                <label>
+                    Environment
+                    <span class="optional">optional</span>
+                    <textarea name="environment" rows="3" placeholder="KEY=value"
+                        aria-describedby="env-help"></textarea>
+                </label>
+                <small id="env-help">One KEY=value pair per line. Each key must be unique.</small>
+                <label class="checkbox">
+                    <input type="checkbox" name="autostart" checked />
+                    Start automatically
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" name="restart_on_failure" />
+                    Restart on failure
+                </label>
+                <small>Restart on failure also requires starting automatically.</small>
+                <div id="form-error" class="error-banner" role="alert" hidden></div>
+            </div>
+            <div class="dialog-footer">
+                <button type="button" data-action="close-form">Cancel</button>
+                <button type="submit" class="primary" id="save-service">Create service</button>
+            </div>
+        </form>
     </dialog>
     <dialog id="delete-dialog" aria-labelledby="delete-title">
-      <form id="delete-form">
-        <div class="dialog-heading">
-          <h2 id="delete-title">Delete service?</h2>
-        </div>
-        <p id="delete-description" class="delete-description"></p>
-        <div id="delete-error" class="error-banner" role="alert" hidden></div>
-        <div class="dialog-footer">
-          <button type="button" data-action="cancel-delete">Cancel</button>
-          <button type="submit" class="danger" id="confirm-delete">Delete service</button>
-        </div>
-      </form>
+        <form id="delete-form">
+            <div class="dialog-heading">
+                <h2 id="delete-title">Delete service?</h2>
+            </div>
+            <p id="delete-description" class="delete-description"></p>
+            <div id="delete-error" class="error-banner" role="alert" hidden></div>
+            <div class="dialog-footer">
+                <button type="button" data-action="cancel-delete">Cancel</button>
+                <button type="submit" class="danger" id="confirm-delete">Delete service</button>
+            </div>
+        </form>
     </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  </body>
+</body>
+
 </html>
