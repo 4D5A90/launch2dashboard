@@ -60,6 +60,43 @@ fn config() -> ServiceConfig {
     }
 }
 #[test]
+fn ssh_without_gui_manager_targets_user_domain_and_background_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let manager = MacLaunchd::new(
+        dir.path().canonicalize().unwrap().join("agents"),
+        dir.path().canonicalize().unwrap().join("logs"),
+        501,
+        scripted(vec![
+            (&["print", "gui/501"], response(125, "")),
+            (&["print", "user/501"], response(0, "")),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(manager.target("demo"), "user/501/launch2dashboard.demo");
+    assert_eq!(
+        manager
+            .document(&config(), Dictionary::new())
+            .get("LimitLoadToSessionType")
+            .and_then(Value::as_string),
+        Some("Background")
+    );
+}
+#[test]
+fn signal_terminated_job_reports_error_without_querying_uptime() {
+    let (_dir, mut manager, _) = fixture();
+    // Scripted rejects any non-launchctl program, so a `ps` call would fail the test.
+    manager.executor = scripted(vec![(
+        &["print", "gui/501/launch2dashboard.demo"],
+        response(
+            0,
+            "gui/501/demo = {\n\tstate = not running\n\tlast terminating signal = Terminated: 15\n}",
+        ),
+    )]);
+    let status = manager.status("demo").unwrap();
+    assert_eq!(status.state, ServiceState::Error);
+    assert_eq!(status.last_exit_code, Some(-15));
+}
+#[test]
 fn service_absence_is_distinct_from_domain_and_permission_errors() {
     let (_dir, mut manager, _) = fixture();
     for code in [113, 125, 1] {
