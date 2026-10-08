@@ -42,7 +42,7 @@ With [bacon](https://dystroy.org/bacon/) (`brew install bacon`), the server rebu
 bacon run
 ```
 
-Refresh the browser after a restart. In bacon, `c` runs clippy, `t` the tests.
+Open pages reload by themselves once the server is back (debug builds only). In bacon, `c` runs clippy, `t` the tests.
 
 Before committing:
 

@@ -57,6 +57,8 @@ Mutations require `X-L2D-Request: 1`: `POST /api/services`, `PUT /api/services/{
 }
 ```
 
+Icons: `GET /api/services/{id}/icon` returns the image; `PUT` (raw PNG or SVG body, 5 MB max, format detected from content) and `DELETE` require the same header. `GET /api/services` and `GET /api/services/{id}` include `icon`, an opaque version (or `null`) to append as `?v=` for caching. Icons are stored in `~/Library/Application Support/launch2dashboard/icons/`, never in the plist, and are deleted with their service.
+
 Only `localhost:9090` and `127.0.0.1:9090` Host headers and local origins are accepted. These browser protections are not authentication against another process or user on the same machine. Do not expose launch2dashboard through a network proxy.
 
 ## Verify
