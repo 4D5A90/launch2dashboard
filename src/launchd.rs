@@ -15,6 +15,7 @@ const PREFIX: &str = "launch2dashboard.";
 const MAX_LOG_BYTES: u64 = 64 * 1024;
 struct CommandResult {
     success: bool,
+    exit_code: Option<i32>,
     stdout: String,
     stderr: String,
 }
@@ -64,15 +65,97 @@ impl Executor for ProcessExecutor {
             .map_err(|_| AppError::new(ErrorKind::Command, "stderr reader failed"))??;
         Ok(CommandResult {
             success: status.success(),
+            exit_code: status.code(),
             stdout: String::from_utf8_lossy(&stdout).into_owned(),
             stderr: String::from_utf8_lossy(&stderr).into_owned(),
         })
     }
 }
+#[derive(Clone, Copy)]
+enum LaunchDomain {
+    Gui(u32),
+    User(u32),
+}
+impl LaunchDomain {
+    fn target(self) -> String {
+        match self {
+            Self::Gui(uid) => format!("gui/{uid}"),
+            Self::User(uid) => format!("user/{uid}"),
+        }
+    }
+    fn session(self) -> &'static str {
+        match self {
+            Self::Gui(_) => "Aqua",
+            Self::User(_) => "Background",
+        }
+    }
+    fn detect(uid: u32, executor: &dyn Executor) -> Result<Self, AppError> {
+        let gui = Self::Gui(uid);
+        let result = executor.run("/bin/launchctl", &["print".into(), gui.target()])?;
+        if result.success {
+            return Ok(gui);
+        }
+        let user = Self::User(uid);
+        let background = executor.run("/bin/launchctl", &["print".into(), user.target()])?;
+        if background.success {
+            return Ok(user);
+        }
+        Err(AppError::new(
+            ErrorKind::Command,
+            format!(
+                "No accessible launchd domain: {}: {}; {}: {}",
+                gui.target(),
+                result.stderr.trim(),
+                user.target(),
+                background.stderr.trim()
+            ),
+        ))
+    }
+}
+
+#[derive(Default)]
+struct JobStatus {
+    pid: Option<u32>,
+    exit_code: Option<i32>,
+    terminating_signal: Option<String>,
+}
+impl JobStatus {
+    fn parse(output: &str) -> Result<Self, AppError> {
+        let mut result = Self::default();
+        let mut state = None;
+        // launchctl indents service fields with one tab and nested dictionaries / arguments
+        // with additional tabs. Values may contain literal braces; never count their braces.
+        for line in output.lines() {
+            let Some(line) = line
+                .strip_prefix('\t')
+                .filter(|line| !line.starts_with('\t'))
+            else {
+                continue;
+            };
+            if let Some((key, value)) = line.split_once(" = ") {
+                match key {
+                    "state" => state = Some(value),
+                    "pid" => result.pid = value.parse().ok().filter(|pid| *pid > 0),
+                    "last exit code" => result.exit_code = value.parse().ok(),
+                    "last terminating signal" => result.terminating_signal = Some(value.to_owned()),
+                    _ => {}
+                }
+            }
+        }
+        if state.is_none() {
+            return Err(AppError::new(
+                ErrorKind::Command,
+                "Unrecognized launchctl print service output",
+            ));
+        }
+        Ok(result)
+    }
+}
+
 pub struct MacLaunchd {
     agents: PathBuf,
     logs_dir: PathBuf,
-    uid: u32,
+    domain: LaunchDomain,
     executor: Arc<dyn Executor>,
 }
 impl MacLaunchd {
@@ -107,12 +190,13 @@ impl MacLaunchd {
         uid: u32,
         executor: Arc<dyn Executor>,
     ) -> Result<Self, AppError> {
+        let domain = LaunchDomain::detect(uid, executor.as_ref())?;
         safe_directory(&agents)?;
         safe_directory(&logs_dir)?;
         Ok(Self {
             agents,
             logs_dir,
-            uid,
+            domain,
             executor,
         })
     }
@@ -121,7 +205,10 @@ impl MacLaunchd {
         Ok(self.agents.join(format!("{PREFIX}{id}.plist")))
     }
     fn target(&self, id: &str) -> String {
-        format!("gui/{}/{PREFIX}{id}", self.uid)
+        format!("{}/{PREFIX}{id}", self.domain.target())
+    }
+    pub fn launch_domain(&self) -> String {
+        self.domain.target()
     }
     fn call(&self, args: Vec<String>) -> Result<String, AppError> {
         let r = self.executor.run("/bin/launchctl", &args)?;
@@ -212,6 +299,10 @@ impl MacLaunchd {
         d.insert("Label".into(), Value::String(format!("{PREFIX}{}", c.id)));
         d.remove("Program");
         d.insert(
+            "LimitLoadToSessionType".into(),
+            Value::String(self.domain.session().into()),
+        );
+        d.insert(
             "ProgramArguments".into(),
             Value::Array(
                 std::iter::once(&c.executable)
@@ -280,16 +371,47 @@ impl MacLaunchd {
         }
         result
     }
+    fn job(&self, id: &str) -> Result<Option<JobStatus>, AppError> {
+        let target = self.target(id);
+        let result = self
+            .executor
+            .run("/bin/launchctl", &["print".into(), target.clone()])?;
+        if result.success {
+            return JobStatus::parse(&result.stdout).map(Some);
+        }
+        // ESRCH from launchctl service-target lookup; domain and permission failures are errors.
+        if result.exit_code == Some(113) {
+            return Ok(None);
+        }
+        Err(AppError::new(
+            ErrorKind::Command,
+            format!(
+                "launchctl print {target} failed (exit {:?}): {}",
+                result.exit_code,
+                result.stderr.trim()
+            ),
+        ))
+    }
     fn loaded(&self, id: &str) -> Result<bool, AppError> {
-        Ok(self
-            .call(vec!["list".into()])?
-            .lines()
-            .any(|line| line.split_whitespace().nth(2) == Some(format!("{PREFIX}{id}").as_str())))
+        Ok(self.job(id)?.is_some())
     }
     fn bootstrap(&self, id: &str) -> Result<(), AppError> {
+        // Older L2D plists defaulted to Aqua, which cannot load in a headless user domain.
+        let mut document = self.read(id)?;
+        if document
+            .get("LimitLoadToSessionType")
+            .and_then(Value::as_string)
+            != Some(self.domain.session())
+        {
+            document.insert(
+                "LimitLoadToSessionType".into(),
+                Value::String(self.domain.session().into()),
+            );
+            self.write(id, &document)?;
+        }
         self.call(vec![
             "bootstrap".into(),
-            format!("gui/{}", self.uid),
+            self.domain.target(),
             self.path(id)?.to_string_lossy().into_owned(),
         ])
         .map(|_| ())
@@ -301,13 +423,24 @@ impl MacLaunchd {
         Ok(())
     }
     fn status(&self, id: &str) -> Result<ServiceStatus, AppError> {
-        let list = self.call(vec!["list".into()])?;
-        let row = list.lines().find_map(|l| {
-            let a = l.split_whitespace().collect::<Vec<_>>();
-            (a.len() == 3 && a[2] == format!("{PREFIX}{id}")).then_some(a)
+        let job = self.job(id)?;
+        let pid = job.as_ref().and_then(|job| job.pid);
+        let signal = job
+            .as_ref()
+            .and_then(|job| job.terminating_signal.as_deref());
+        let exit = job.as_ref().and_then(|job| job.exit_code).or_else(|| {
+            signal
+                .and_then(|value| {
+                    value
+                        .rsplit_once(':')
+                        .map_or(value, |(_, number)| number)
+                        .trim()
+                        .parse::<i32>()
+                        .ok()
+                })
+                .filter(|value| *value > 0)
+                .map(|value| -value)
         });
-        let pid = row.as_ref().and_then(|r| r[0].parse::<u32>().ok());
-        let exit = row.as_ref().and_then(|r| r[1].parse::<i32>().ok());
         let uptime_seconds = pid.and_then(|pid| {
             self.executor
                 .run(
@@ -321,7 +454,7 @@ impl MacLaunchd {
         Ok(ServiceStatus {
             state: if pid.is_some() {
                 ServiceState::Running
-            } else if exit.is_some_and(|e| e != 0) {
+            } else if signal.is_some() || exit.is_some_and(|e| e != 0) {
                 ServiceState::Error
             } else {
                 ServiceState::Stopped
@@ -330,9 +463,14 @@ impl MacLaunchd {
             uptime_seconds,
             restart_count: None,
             last_exit_code: exit,
-            error: exit
-                .filter(|e| *e != 0 && pid.is_none())
-                .map(|e| format!("Last process exit: {e}")),
+            error: if pid.is_some() {
+                None
+            } else if let Some(signal) = signal {
+                Some(format!("Last process terminated by signal: {signal}"))
+            } else {
+                exit.filter(|e| *e != 0)
+                    .map(|e| format!("Last process exit: {e}"))
+            },
         })
     }
     fn ensure_logs(&self, id: &str) -> Result<(), AppError> {
@@ -624,11 +762,12 @@ mod tests {
             }
             Ok(CommandResult {
                 success: true,
-                stdout: if args[0] == "list" {
+                exit_code: Some(0),
+                stdout: if args[0] == "print" {
                     if *self.running.lock().unwrap() {
-                        "42\t0\tlaunch2dashboard.demo\n".into()
+                        "service = {\n\tstate = running\n\tpid = 42\n\tlast exit code = 0\n}".into()
                     } else {
-                        "-\t0\tlaunch2dashboard.demo\n".into()
+                        "service = {\n\tstate = not running\n\tlast exit code = 0\n}".into()
                     }
                 } else {
                     String::new()
@@ -647,6 +786,7 @@ mod tests {
             fake.clone(),
         )
         .unwrap();
+        fake.calls.lock().unwrap().clear();
         (dir, m, fake)
     }
     fn config() -> ServiceConfig {
@@ -659,6 +799,202 @@ mod tests {
             autostart: true,
             restart_on_failure: true,
         }
+    }
+    struct Headless;
+    impl Executor for Headless {
+        fn run(&self, _program: &str, args: &[String]) -> Result<CommandResult, AppError> {
+            Ok(CommandResult {
+                success: args != ["print", "gui/501"],
+                exit_code: Some(if args == ["print", "gui/501"] { 125 } else { 0 }),
+                stdout: String::new(),
+                stderr: "Domain does not support specified action".into(),
+            })
+        }
+    }
+    #[test]
+    fn ssh_without_gui_uses_user_domain() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = MacLaunchd::new(
+            dir.path().canonicalize().unwrap().join("agents"),
+            dir.path().canonicalize().unwrap().join("logs"),
+            501,
+            Arc::new(Headless),
+        )
+        .unwrap();
+        assert_eq!(manager.target("demo"), "user/501/launch2dashboard.demo");
+        assert_eq!(
+            manager
+                .document(&config(), Dictionary::new())
+                .get("LimitLoadToSessionType")
+                .and_then(Value::as_string),
+            Some("Background")
+        );
+    }
+    struct Scripted {
+        steps: Mutex<std::collections::VecDeque<(Vec<String>, CommandResult)>>,
+    }
+    impl Executor for Scripted {
+        fn run(&self, program: &str, args: &[String]) -> Result<CommandResult, AppError> {
+            assert_eq!(program, "/bin/launchctl");
+            let (expected, result) = self
+                .steps
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("unexpected command");
+            assert_eq!(args, expected);
+            Ok(result)
+        }
+    }
+    fn response(exit: i32, stdout: &str) -> CommandResult {
+        CommandResult {
+            success: exit == 0,
+            exit_code: Some(exit),
+            stdout: stdout.into(),
+            stderr: format!("error {exit}"),
+        }
+    }
+    fn scripted(steps: Vec<(&[&str], CommandResult)>) -> Arc<Scripted> {
+        Arc::new(Scripted {
+            steps: Mutex::new(
+                steps
+                    .into_iter()
+                    .map(|(args, result)| (args.iter().map(|s| s.to_string()).collect(), result))
+                    .collect(),
+            ),
+        })
+    }
+    #[test]
+    fn domain_prefers_gui_and_reports_failure_of_both_domains() {
+        let executor = scripted(vec![(&["print", "gui/501"], response(0, ""))]);
+        assert_eq!(
+            LaunchDomain::detect(501, executor.as_ref())
+                .unwrap()
+                .target(),
+            "gui/501"
+        );
+        let executor = scripted(vec![
+            (&["print", "gui/501"], response(125, "")),
+            (&["print", "user/501"], response(1, "")),
+        ]);
+        let error = LaunchDomain::detect(501, executor.as_ref()).err().unwrap();
+        assert!(error.message.contains("gui/501: error 125"));
+        assert!(error.message.contains("user/501: error 1"));
+    }
+    #[test]
+    fn print_parser_does_not_treat_literal_braces_as_structure() {
+        let output = "user/501/demo = {\n\targuments = {\n\t\t/bin/echo\n\t\t{\n\t}\n\tenvironment = {\n\t\tLITERAL => {\n\t}\n\tstate = running\n\tpid = 42\n\tlast exit code = 0\n}";
+        let parsed = JobStatus::parse(output).unwrap();
+        assert_eq!(parsed.pid, Some(42));
+        assert_eq!(parsed.exit_code, Some(0));
+    }
+    #[test]
+    fn signal_termination_is_error_not_stopped() {
+        let (_dir, mut manager, _) = fixture();
+        manager.executor = scripted(vec![(
+            &["print", "gui/501/launch2dashboard.demo"],
+            response(
+                0,
+                "gui/501/demo = {\n\tstate = not running\n\tlast terminating signal = Terminated: 15\n}",
+            ),
+        )]);
+        let status = manager.status("demo").unwrap();
+        assert_eq!(status.state, ServiceState::Error);
+        assert_eq!(status.last_exit_code, Some(-15));
+        assert!(status.error.unwrap().contains("Terminated: 15"));
+    }
+    #[test]
+    fn print_parser_uses_only_service_fields() {
+        let result = JobStatus::parse("user/501/demo = {\n\tstate = xpcproxy\n\tpid = 57894\n\tlast exit code = (never exited)\n\tenvironment = {\n\t\tpid = 999\n\t\tlast exit code = 9\n\t}\n}").unwrap();
+        assert_eq!(result.pid, Some(57894));
+        assert_eq!(result.exit_code, None);
+        let result =
+            JobStatus::parse("user/501/demo = {\n\tstate = not running\n\tlast exit code = 7\n}")
+                .unwrap();
+        assert_eq!(result.pid, None);
+        assert_eq!(result.exit_code, Some(7));
+        assert!(JobStatus::parse("unexpected output").is_err());
+        assert!(
+            JobStatus::parse("demo = {\n\tenvironment = {\n\t\tstate = running\n\t}\n}").is_err()
+        );
+    }
+    #[test]
+    fn service_absence_is_distinct_from_domain_and_permission_errors() {
+        let (_dir, mut manager, _) = fixture();
+        for code in [113, 125, 1] {
+            manager.executor = scripted(vec![(
+                &["print", "gui/501/launch2dashboard.demo"],
+                response(code, ""),
+            )]);
+            let result = manager.job("demo");
+            if code == 113 {
+                assert!(result.unwrap().is_none());
+            } else {
+                assert!(result.is_err());
+            }
+        }
+    }
+    #[test]
+    fn ssh_mutations_and_status_keep_same_domain_and_upgrade_old_plist() {
+        let (_dir, mut manager, _) = fixture();
+        manager.domain = LaunchDomain::User(501);
+        let mut doc = manager.document(&config(), Dictionary::new());
+        doc.remove("LimitLoadToSessionType");
+        doc.insert("ThrottleInterval".into(), Value::Integer(17.into()));
+        manager.write("demo", &doc).unwrap();
+        let path = manager.path("demo").unwrap().to_string_lossy().into_owned();
+        let output =
+            "user/501/launch2dashboard.demo = {\n\tstate = not running\n\tlast exit code = 0\n}";
+        let executor = scripted(vec![
+            (
+                &["print", "user/501/launch2dashboard.demo"],
+                response(113, ""),
+            ),
+            (&["bootstrap", "user/501", &path], response(0, "")),
+            (
+                &["kickstart", "user/501/launch2dashboard.demo"],
+                response(0, ""),
+            ),
+            (
+                &["print", "user/501/launch2dashboard.demo"],
+                response(0, output),
+            ),
+            (
+                &["print", "user/501/launch2dashboard.demo"],
+                response(0, output),
+            ),
+            (
+                &["bootout", "user/501/launch2dashboard.demo"],
+                response(0, ""),
+            ),
+            (
+                &["print", "user/501/launch2dashboard.demo"],
+                response(113, ""),
+            ),
+        ]);
+        manager.executor = executor.clone();
+        manager.action("demo", "start").unwrap();
+        manager.action("demo", "stop").unwrap();
+        assert!(executor.steps.lock().unwrap().is_empty());
+        let written = manager.read("demo").unwrap();
+        assert_eq!(
+            written
+                .get("LimitLoadToSessionType")
+                .and_then(Value::as_string),
+            Some("Background")
+        );
+        assert_eq!(written.get("ThrottleInterval"), doc.get("ThrottleInterval"));
+    }
+    #[test]
+    fn failed_background_bootstrap_does_not_retry_another_domain() {
+        let (_dir, mut manager, _) = fixture();
+        manager.domain = LaunchDomain::User(501);
+        let path = manager.path("demo").unwrap().to_string_lossy().into_owned();
+        let executor = scripted(vec![(&["bootstrap", "user/501", &path], response(5, ""))]);
+        manager.executor = executor.clone();
+        assert!(manager.create(config()).is_err());
+        assert!(!manager.path("demo").unwrap().exists());
+        assert!(executor.steps.lock().unwrap().is_empty());
     }
     #[test]
     fn create_roundtrip_and_stop_boots_out() {

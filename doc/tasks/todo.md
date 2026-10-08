@@ -25,3 +25,11 @@ Périmètre : plan fourni et maquette, demande d'implémentation utilisateur ; �
 - [x] Ajouter au README les prérequis macOS, le build release, l’installation Cargo et le lancement.
 - [x] Déplacer les templates et assets dans src/ ; configurer askama.toml et include_str.
 - [x] Actualiser les chemins documentés ; vérifier 24 tests, check, fmt, clippy, syntaxe JS et build release.
+
+## Correction SSH / Background
+
+- [x] Reproduire le code 125 sur le domaine GUI distant et vérifier le domaine utilisateur.
+- [x] Définir les critères dans stories/ssh-launch-domain.md.
+- [x] Corriger la sélection du domaine, les plists et les lectures d’état avec tests de régression.
+- [x] Valider les gates et un service temporaire distant.
+- [x] Livrer le binaire corrigé et documenter la preuve.

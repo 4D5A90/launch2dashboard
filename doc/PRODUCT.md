@@ -15,7 +15,7 @@ Utilisateur macOS gérant ses LaunchAgents locaux depuis un navigateur.
 Lister, configurer, démarrer, arrêter et diagnostiquer les services launchd du namespace `launch2dashboard.*`.
 
 ## Operating Context
-`launchd` reste la source de vérité. Plists dans `~/Library/LaunchAgents`, logs dans `~/Library/Logs/launch2dashboard`.
+`launchd` reste la source de vérité. Lancement en session graphique ou via SSH sans session graphique ; domaine GUI si disponible, sinon domaine utilisateur Background. Plists dans `~/Library/LaunchAgents`, logs dans `~/Library/Logs/launch2dashboard`.
 
 ## Capabilities and Constraints
 V1 : CRUD, actions, statuts, PID, uptime et nombre de relances quand disponibles, logs et SSE. Écoute exclusivement sur `127.0.0.1:9090`, décision utilisateur du 8 octobre 2026. CPU/RAM et multi-host exclus de V1.

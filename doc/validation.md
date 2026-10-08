@@ -48,7 +48,7 @@ Revue visuelle Impeccable : structure conforme au périmètre de la maquette, ad
 ## Limites explicites
 
 - Pas de compteur de redémarrages historique fiable sans stockage : affiché `—`.
-- L'état Starting n'est pas inféré à partir de `launchctl list` ; états Running/Stopped/Error fondés sur PID et exit code.
+- Les états sont lus dans le domaine choisi via `launchctl print` ; le format texte macOS reste une limite de compatibilité couverte par fixtures.
 - CPU/RAM et multi-host restent hors V1 selon le plan.
 - Les politiques launchd avancées non représentables dans le formulaire ne sont pas éditables.
 - Stop et l'édition d'un service arrêté le laissent déchargé jusqu'à Start ou la prochaine ouverture de session.
@@ -63,3 +63,34 @@ Après ces changements : 24 tests verts, cargo check/fmt/clippy et build release
 ## Sources UI dans src/
 
 Templates déplacés dans `src/templates/`, ressources dans `src/static/`. Askama configuré par `askama.toml` ; routes HTTP inchangées. Après déplacement : 24 tests verts, cargo check/fmt/clippy et build release verts, syntaxe JavaScript valide. README complété avec les prérequis et les commandes de compilation, installation et lancement sur macOS.
+
+## Correctif SSH sans session graphique
+
+Cause confirmée dans le compte exécutant L2D : `launchctl print gui/502` échoue avec le code 125 ; `launchctl print user/502` réussit. Le domaine GUI était imposé et les lectures d’état utilisaient le contexte ambiant.
+
+Régression TDD : attente `user/501/launch2dashboard.demo`, résultat initial `gui/501/launch2dashboard.demo`. Deux régressions supplémentaires d’analyse du texte ont aussi échoué avant correction : accolade dans un argument et terminaison par signal.
+
+Après correction : **32 tests verts**, formatage, Clippy et build release verts. Revue des deux cas de parsing : résolus. La lecture utilise les champs directs (une tabulation) ; `last terminating signal = Terminated: 15` produit Error avec code -15.
+
+Binaire installé dans `/Users/hermes/.cargo/bin/launch2dashboard` sur `mini.local`, SHA-256 `350fc3298717d5f042949b04eb24187338ff191152b20b031005c7e1c5a5a1e1`. Copie de secours : `/Users/hermes/.cargo/bin/.launch2dashboard.before-domain-fix-0aa7dc40f9`. Relancé sous le même compte, sans installation de démarrage automatique. Le journal `~/Library/Logs/launch2dashboard/server.log` confirme :
+
+```text
+Managing launchd domain user/502
+launch2dashboard is listening at http://127.0.0.1:9090
+```
+
+Vérification réelle via l’API sur un service sleep temporaire dédié, avec `LimitLoadToSessionType=Background` :
+
+```text
+CREATE: 201 stopped
+START: 200 running
+RESTART: 200 running
+EDIT RUNNING: 200 running
+LOGS: 200
+SSE: 200
+STOP: 200 stopped
+DELETE: 204
+Temporary test artifacts cleaned
+```
+
+Le service temporaire a été déchargé, son plist supprimé et ses logs de test mis à la corbeille. Aucun autre service existant modifié. Les sources corrigées sont dans ce projet ; la mise à jour distante porte sur le binaire installé.

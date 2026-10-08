@@ -57,6 +57,18 @@ Pour essayer sans installer : `./target/release/launch2dashboard`. Pour dévelop
 
 L’installation du binaire ne configure pas de démarrage automatique à l’ouverture de session. Rust est nécessaire pour compiler, pas pour exécuter le binaire compilé.
 
+### Mac distant via SSH
+
+L2D fonctionne aussi sans session graphique : il choisit le domaine launchd `user/<uid>` (Background) lorsque `gui/<uid>` est indisponible. Le domaine choisi apparaît au démarrage.
+
+Lancer `launch2dashboard` sur le Mac distant, puis créer un tunnel depuis le Mac qui ouvre le navigateur :
+
+```sh
+ssh -N -L 9090:127.0.0.1:9090 utilisateur@mac-distant
+```
+
+Ouvrir ensuite [127.0.0.1:9090](http://127.0.0.1:9090) sur le Mac local. Remplacer `utilisateur@mac-distant` par la destination SSH et garder le tunnel ouvert.
+
 ## Vérifier et consulter la documentation
 
 ```sh

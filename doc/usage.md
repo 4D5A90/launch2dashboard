@@ -4,13 +4,15 @@ Local macOS dashboard for `launchd` services in the `launch2dashboard.*` namespa
 
 ## Run
 
-Requires macOS, Rust stable and a logged-in graphical user session. Run as your normal user, not with `sudo`.
+Requires macOS and Rust stable to build. Run as your normal user, not with `sudo`. Both a graphical session and an SSH session without a graphical login are supported.
 
 ```sh
 cargo run --locked
 ```
 
 Open <http://127.0.0.1:9090>. launch2dashboard binds **only** to `127.0.0.1:9090`. It does not install itself as a login item or create example services. Close it with Ctrl-C; your services remain managed by launchd.
+
+At startup, L2D selects `gui/<uid>` when available, otherwise `user/<uid>`. Background services use `LimitLoadToSessionType=Background`; the same selected domain is used for actions and status reads. L2D does not switch domains after a failed action. Apple documents Aqua as the default session type when that plist key is omitted, so selecting the user domain alone is insufficient. See [Apple TN2083](https://developer.apple.com/library/archive/technotes/tn2083/_index.html).
 
 ```sh
 cargo build --release --locked
@@ -35,7 +37,7 @@ Logs are tailed from `~/Library/Logs/launch2dashboard/<id>.log` and `<id>.err.lo
 
 The dashboard polls states every three seconds. PID and process uptime are shown when available. An unavailable restart count is shown as `—`; launch2dashboard does not maintain a fabricated counter. CPU/RAM monitoring and multiple hosts are outside V1.
 
-The macOS list output does not reliably distinguish a pending launch from a stopped process, so launch2dashboard does not infer a `Starting` state. Invalid plists appear as errors without hiding healthy services. Files with unsupported IDs or structures must be repaired outside the form. Logs from externally authored plists are readable only when they use launch2dashboard's expected log paths.
+Status comes from `launchctl print <domain>/<label>` in the selected domain. L2D reads only direct state, PID and exit-code fields; an unreadable response is an error rather than a fabricated status. A PID is considered running, including the short xpcproxy launch phase. The output format is not a stable macOS API, so its parsing is covered by fixtures. Invalid plists appear as errors without hiding healthy services. Files with unsupported IDs or structures must be repaired outside the form. Logs from externally authored plists are readable only when they use launch2dashboard's expected log paths.
 
 ## Local HTTP API
 

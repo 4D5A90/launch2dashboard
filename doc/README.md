@@ -7,6 +7,7 @@
 - [Brief du dashboard](design/dashboard.md)
 - [Maquette de référence](design/dashboard-mockup.png)
 - [Critères d’acceptation](stories/v1.md)
+- [Correction du lancement via SSH](stories/ssh-launch-domain.md)
 - [Décision d’architecture](adr/001-local-service-manager.md)
 - [Validation et limites](validation.md)
 - [Suivi](tasks/todo.md)
