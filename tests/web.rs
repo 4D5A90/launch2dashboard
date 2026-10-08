@@ -111,6 +111,56 @@ impl ServiceManager for FakeManager {
         })
     }
 }
+#[derive(Default)]
+struct MemoryIcons {
+    icons: Mutex<BTreeMap<String, (Icon, usize)>>,
+    writes: AtomicUsize,
+}
+fn icons() -> Arc<MemoryIcons> {
+    Arc::new(MemoryIcons::default())
+}
+impl IconStore for MemoryIcons {
+    fn get(&self, id: &str) -> Result<Option<Icon>, AppError> {
+        Ok(self
+            .icons
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|(icon, _)| icon.clone()))
+    }
+    fn version(&self, id: &str) -> Result<Option<String>, AppError> {
+        Ok(self
+            .icons
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|(_, v)| v.to_string()))
+    }
+    fn put(&self, id: &str, icon: &Icon) -> Result<(), AppError> {
+        let version = self.writes.fetch_add(1, Ordering::SeqCst);
+        self.icons
+            .lock()
+            .unwrap()
+            .insert(id.into(), (icon.clone(), version));
+        Ok(())
+    }
+    fn delete(&self, id: &str) -> Result<(), AppError> {
+        self.icons.lock().unwrap().remove(id);
+        Ok(())
+    }
+}
+const PNG: &[u8] = b"\x89PNG\r\n\x1a\npixels";
+const SVG: &[u8] = b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>";
+fn upload(path: &str, bytes: Vec<u8>) -> Request<Body> {
+    Request::builder()
+        .method("PUT")
+        .uri(path)
+        .header("host", "127.0.0.1:9090")
+        .header("x-l2d-request", "1")
+        .header("content-type", "application/octet-stream")
+        .body(Body::from(bytes))
+        .unwrap()
+}
 fn request(method: &str, path: &str, body: Option<Value>) -> Request<Body> {
     let mut builder = Request::builder()
         .method(method)
@@ -134,7 +184,7 @@ async fn json_body(response: Response) -> Value {
 #[tokio::test]
 async fn rejects_untrusted_requests_before_touching_service_manager() {
     let manager = Arc::new(FakeManager::new());
-    let app = router(manager.clone());
+    let app = router(manager.clone(), icons());
     for (header, value) in [
         ("host", "attacker.test:9090"),
         ("host", "127.0.0.1:9090.attacker.test"),
@@ -176,7 +226,7 @@ async fn rejects_untrusted_requests_before_touching_service_manager() {
 
 #[tokio::test]
 async fn same_origin_browser_and_local_cli_can_read_services_and_status() {
-    let app = router(Arc::new(FakeManager::new()));
+    let app = router(Arc::new(FakeManager::new()), icons());
     let mut req = request("GET", "/api/services", None);
     req.headers_mut()
         .insert("origin", "http://127.0.0.1:9090".parse().unwrap());
@@ -202,7 +252,7 @@ async fn same_origin_browser_and_local_cli_can_read_services_and_status() {
 
 #[tokio::test]
 async fn creation_returns_created_and_domain_errors_keep_their_meaning() {
-    let app = router(Arc::new(FakeManager::new()));
+    let app = router(Arc::new(FakeManager::new()), icons());
     for (id, expected) in [
         ("new-service", StatusCode::CREATED),
         ("../escape", StatusCode::BAD_REQUEST),
@@ -243,7 +293,7 @@ async fn creation_returns_created_and_domain_errors_keep_their_meaning() {
 #[tokio::test]
 async fn mutation_routes_dispatch_exact_target_and_action() {
     let manager = Arc::new(FakeManager::new());
-    let app = router(manager.clone());
+    let app = router(manager.clone(), icons());
     let mut updated = config("example");
     updated.executable = "/bin/sleep".into();
     let response = app
@@ -299,7 +349,7 @@ async fn mutation_routes_dispatch_exact_target_and_action() {
 
 #[tokio::test]
 async fn static_assets_have_correct_types_and_security_headers() {
-    let app = router(Arc::new(FakeManager::new()));
+    let app = router(Arc::new(FakeManager::new()), icons());
     for (path, content_type) in [
         ("/static/style.css", "text/css"),
         ("/static/app.js", "text/javascript"),
@@ -332,7 +382,7 @@ async fn static_assets_have_correct_types_and_security_headers() {
 async fn logs_stream_sends_initial_snapshot_and_reports_later_failure() {
     let mut manager = FakeManager::new();
     manager.fail_later_logs = true;
-    let app = router(Arc::new(manager));
+    let app = router(Arc::new(manager), icons());
     let response = app
         .oneshot(request("GET", "/api/services/example/logs/stream", None))
         .await
@@ -379,7 +429,7 @@ async fn logs_stream_sends_initial_snapshot_and_reports_later_failure() {
 
 #[tokio::test]
 async fn missing_service_cannot_open_a_successful_logs_stream() {
-    let response = router(Arc::new(FakeManager::new()))
+    let response = router(Arc::new(FakeManager::new()), icons())
         .oneshot(request("GET", "/api/services/missing/logs/stream", None))
         .await
         .unwrap();
@@ -391,7 +441,7 @@ async fn rendered_service_data_cannot_inject_html_or_attributes() {
     let mut manager = FakeManager::new();
     manager.service.config.id = "\"><script>alert('id')</script>".into();
     manager.service.config.executable = "/bin/<img src=x onerror=alert('exec')>".into();
-    let response = router(Arc::new(manager))
+    let response = router(Arc::new(manager), icons())
         .oneshot(request("GET", "/", None))
         .await
         .unwrap();
@@ -409,4 +459,134 @@ async fn rendered_service_data_cannot_inject_html_or_attributes() {
         html.contains("alert("),
         "The hostile fixture must actually be rendered to test escaping"
     );
+}
+
+#[tokio::test]
+async fn uploaded_icon_is_listed_and_served_with_a_sandboxed_policy() {
+    let store = icons();
+    let app = router(Arc::new(FakeManager::new()), store.clone());
+    let send = |req| app.clone().oneshot(req);
+    let listed_icon = |body: Value| body[0]["icon"].clone();
+    assert_eq!(
+        listed_icon(json_body(send(request("GET", "/api/services", None)).await.unwrap()).await),
+        Value::Null
+    );
+    let response = send(upload("/api/services/example/icon", PNG.to_vec()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let first =
+        listed_icon(json_body(send(request("GET", "/api/services", None)).await.unwrap()).await);
+    assert!(first.is_string());
+    let detail = json_body(
+        send(request("GET", "/api/services/example", None))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(detail["icon"], first);
+    assert_eq!(detail["config"]["id"], "example");
+
+    let response = send(request("GET", "/api/services/example/icon", None))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    assert_eq!(response.headers()["x-content-type-options"], "nosniff");
+    let policy = response.headers()["content-security-policy"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        policy.contains("default-src 'none'") && policy.contains("sandbox"),
+        "{policy}"
+    );
+    assert!(!policy.contains("script-src"), "{policy}");
+    assert!(
+        response.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .contains("immutable")
+    );
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        PNG
+    );
+
+    send(upload("/api/services/example/icon", SVG.to_vec()))
+        .await
+        .unwrap();
+    let response = send(request("GET", "/api/services/example/icon", None))
+        .await
+        .unwrap();
+    assert_eq!(response.headers()["content-type"], "image/svg+xml");
+    let second =
+        listed_icon(json_body(send(request("GET", "/api/services", None)).await.unwrap()).await);
+    assert_ne!(second, first);
+
+    let response = send(request("DELETE", "/api/services/example/icon", None))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let response = send(request("GET", "/api/services/example/icon", None))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    // The general policy still applies everywhere else.
+    let response = send(request("GET", "/api/services", None)).await.unwrap();
+    assert_eq!(response.headers()["cache-control"], "no-store");
+}
+
+#[tokio::test]
+async fn icon_upload_rejects_bad_content_oversize_and_unknown_services() {
+    let store = icons();
+    let app = router(Arc::new(FakeManager::new()), store.clone());
+    let send = |req| app.clone().oneshot(req);
+    send(upload("/api/services/example/icon", PNG.to_vec()))
+        .await
+        .unwrap();
+    let response = send(upload("/api/services/example/icon", b"GIF89a".to_vec()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(store.get("example").unwrap().unwrap().bytes(), PNG);
+
+    let mut oversize = PNG.to_vec();
+    oversize.resize(MAX_ICON_BYTES + 1, 0);
+    let response = send(upload("/api/services/example/icon", oversize))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(store.get("example").unwrap().unwrap().bytes(), PNG);
+
+    let mut largest = PNG.to_vec();
+    largest.resize(MAX_ICON_BYTES, 0);
+    let response = send(upload("/api/services/example/icon", largest))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = send(upload("/api/services/missing/icon", PNG.to_vec()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(store.get("missing").unwrap(), None);
+}
+
+#[tokio::test]
+async fn deleting_a_service_deletes_its_icon() {
+    let store = icons();
+    let app = router(Arc::new(FakeManager::new()), store.clone());
+    let response = app
+        .clone()
+        .oneshot(upload("/api/services/example/icon", PNG.to_vec()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let response = app
+        .oneshot(request("DELETE", "/api/services/example", None))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(store.get("example").unwrap(), None);
 }

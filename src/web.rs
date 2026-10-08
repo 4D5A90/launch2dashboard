@@ -1,7 +1,11 @@
-use crate::domain::{AppError, ErrorKind, Service, ServiceAction, ServiceConfig, ServiceManager};
+use crate::domain::{
+    AppError, ErrorKind, Icon, IconStore, MAX_ICON_BYTES, Service, ServiceAction, ServiceConfig,
+    ServiceManager,
+};
 use askama::Template;
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{DefaultBodyLimit, Path, Request, State},
     http::{HeaderValue, Method, StatusCode, header},
     middleware::{self, Next},
@@ -11,6 +15,7 @@ use axum::{
     },
     routing::{get, post},
 };
+use serde::Serialize;
 use serde_json::json;
 use std::sync::Mutex;
 use std::{convert::Infallible, sync::Arc, time::Duration};
@@ -18,6 +23,7 @@ use std::{convert::Infallible, sync::Arc, time::Duration};
 #[derive(Clone)]
 struct AppState {
     manager: Arc<dyn ServiceManager>,
+    icons: Arc<dyn IconStore>,
     operations: Arc<Mutex<()>>,
 }
 
@@ -28,7 +34,7 @@ struct Dashboard {
     selected_id: String,
 }
 
-pub fn router(manager: Arc<dyn ServiceManager>) -> Router {
+pub fn router(manager: Arc<dyn ServiceManager>, icons: Arc<dyn IconStore>) -> Router {
     Router::new()
         .route("/", get(dashboard))
         .route("/services/{id}", get(service_page))
@@ -42,11 +48,19 @@ pub fn router(manager: Arc<dyn ServiceManager>) -> Router {
         .route("/api/services/{id}/restart", post(restart))
         .route("/api/services/{id}/logs", get(logs))
         .route("/api/services/{id}/logs/stream", get(stream_logs))
+        .route(
+            "/api/services/{id}/icon",
+            get(icon)
+                .put(upload_icon)
+                .delete(delete_icon)
+                .layer(DefaultBodyLimit::max(MAX_ICON_BYTES)),
+        )
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))) })
         .layer(DefaultBodyLimit::max(64 * 1024))
         .layer(middleware::from_fn(local_requests_only))
         .with_state(AppState {
             manager,
+            icons,
             operations: Arc::new(Mutex::new(())),
         })
 }
@@ -81,7 +95,8 @@ async fn local_requests_only(request: Request, next: Next) -> Response {
     }
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
-    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
+    // Handlers may set a stricter policy or cache rule of their own (see `icon`).
+    headers.entry(header::CONTENT_SECURITY_POLICY).or_insert(HeaderValue::from_static(
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
     ));
     headers.insert(
@@ -89,7 +104,9 @@ async fn local_requests_only(request: Request, next: Next) -> Response {
         HeaderValue::from_static("nosniff"),
     );
     headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
-    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers
+        .entry(header::CACHE_CONTROL)
+        .or_insert(HeaderValue::from_static("no-store"));
     response
 }
 
@@ -171,14 +188,42 @@ async fn service_page(
 ) -> Result<Html<String>, HttpError> {
     render(state, id).await
 }
-async fn list(State(state): State<AppState>) -> Result<Json<Vec<Service>>, HttpError> {
-    run(&state, |manager| manager.list()).await.map(Json)
+/// A service as the dashboard shows it, with the version of its icon (if any).
+#[derive(Serialize)]
+struct ServiceView {
+    #[serde(flatten)]
+    service: Service,
+    icon: Option<String>,
+}
+impl ServiceView {
+    fn new(icons: &dyn IconStore, service: Service) -> Self {
+        // An unreadable icon must not hide the service itself.
+        let icon = icons.version(&service.config.id).ok().flatten();
+        Self { service, icon }
+    }
+}
+async fn list(State(state): State<AppState>) -> Result<Json<Vec<ServiceView>>, HttpError> {
+    let icons = Arc::clone(&state.icons);
+    run(&state, move |manager| {
+        Ok(manager
+            .list()?
+            .into_iter()
+            .map(|service| ServiceView::new(icons.as_ref(), service))
+            .collect())
+    })
+    .await
+    .map(Json)
 }
 async fn detail(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<Service>, HttpError> {
-    run(&state, move |manager| manager.get(&id)).await.map(Json)
+) -> Result<Json<ServiceView>, HttpError> {
+    let icons = Arc::clone(&state.icons);
+    run(&state, move |manager| {
+        Ok(ServiceView::new(icons.as_ref(), manager.get(&id)?))
+    })
+    .await
+    .map(Json)
 }
 async fn status(
     State(state): State<AppState>,
@@ -212,7 +257,67 @@ async fn delete(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, HttpError> {
-    run(&state, move |manager| manager.delete(&id)).await?;
+    let icons = Arc::clone(&state.icons);
+    run(&state, move |manager| {
+        manager.delete(&id)?;
+        icons.delete(&id)
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+async fn icon(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Response, HttpError> {
+    let icons = Arc::clone(&state.icons);
+    let icon = run(&state, move |manager| {
+        manager.get(&id)?;
+        icons
+            .get(&id)?
+            .ok_or_else(|| AppError::new(ErrorKind::NotFound, "Service has no icon"))
+    })
+    .await?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, icon.format().media_type()),
+            // An SVG opened directly must not run anything in the dashboard origin.
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            ),
+            // Clients request `?v=<version>`, which changes whenever the icon does.
+            (
+                header::CACHE_CONTROL,
+                "private, max-age=31536000, immutable",
+            ),
+        ],
+        icon.bytes().to_vec(),
+    )
+        .into_response())
+}
+async fn upload_icon(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> Result<StatusCode, HttpError> {
+    let icons = Arc::clone(&state.icons);
+    run(&state, move |manager| {
+        manager.get(&id)?;
+        icons.put(&id, &Icon::parse(body.to_vec())?)
+    })
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+async fn delete_icon(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, HttpError> {
+    let icons = Arc::clone(&state.icons);
+    run(&state, move |manager| {
+        manager.get(&id)?;
+        icons.delete(&id)
+    })
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 async fn action(
