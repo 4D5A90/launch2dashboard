@@ -9,3 +9,5 @@
 - 2026-10-08 : préférence utilisateur : regrouper les sources de l’interface dans `src/templates/` et `src/static/`, avec Askama configuré explicitement. Garder les routes HTTP `/static/` indépendantes de l’arborescence disque.
 
 - 2026-10-08 : un daemon macOS peut être lancé via SSH sans session Aqua. Ne jamais déduire la disponibilité du domaine GUI depuis le seul UID ; sélectionner explicitement un domaine accessible et l’utiliser pour toutes les commandes, avec le type de session plist correspondant.
+
+- 2026-10-09 : un `git add -A src` a embarqué un reformatage du template fait par l'utilisateur en parallèle dans un commit de refactor. Stager uniquement les fichiers nommés que j'ai modifiés, et relire `git status` avant chaque commit.
