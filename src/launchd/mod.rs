@@ -1,5 +1,5 @@
+mod definition;
 mod executor;
-mod plist;
 mod secure_fs;
 mod session;
 mod status;
@@ -9,8 +9,8 @@ mod testing;
 mod tests;
 
 use crate::domain::*;
-use ::plist::{Dictionary, Value};
 use executor::{Executor, ProcessExecutor};
+use plist::{Dictionary, Value};
 use secure_fs::{open_read, safe_directory, safe_regular};
 use session::LaunchDomain;
 use status::JobStatus;
@@ -68,10 +68,10 @@ impl MacLaunchd {
     }
     fn path(&self, id: &str) -> Result<PathBuf, AppError> {
         validate_id(id)?;
-        Ok(self.agents.join(format!("{}.plist", plist::label(id))))
+        Ok(self.agents.join(format!("{}.plist", definition::label(id))))
     }
     fn target(&self, id: &str) -> String {
-        format!("{}/{}", self.domain.target(), plist::label(id))
+        format!("{}/{}", self.domain.target(), definition::label(id))
     }
     pub fn launch_domain(&self) -> String {
         self.domain.target()
@@ -94,7 +94,7 @@ impl MacLaunchd {
         let dict = value.into_dictionary().ok_or_else(|| {
             AppError::new(ErrorKind::Validation, "Plist root must be a dictionary")
         })?;
-        if dict.get("Label").and_then(Value::as_string) != Some(plist::label(id).as_str()) {
+        if dict.get("Label").and_then(Value::as_string) != Some(definition::label(id).as_str()) {
             return Err(AppError::new(
                 ErrorKind::Validation,
                 format!("Plist label does not match service {id}"),
@@ -103,12 +103,14 @@ impl MacLaunchd {
         Ok(dict)
     }
     fn document(&self, c: &ServiceConfig, base: Dictionary) -> Dictionary {
-        plist::to_plist(c, self.domain.session(), &self.logs_dir, base)
+        definition::to_plist(c, self.domain.session(), &self.logs_dir, base)
     }
     fn write(&self, id: &str, d: &Dictionary) -> Result<(), AppError> {
-        let temp = self
-            .agents
-            .join(format!(".{PREFIX}{id}.{}.tmp", std::process::id()));
+        let temp = self.agents.join(format!(
+            ".{}.{}.tmp",
+            definition::label(id),
+            std::process::id()
+        ));
         secure_fs::replace_private(&self.path(id)?, &temp, |file| {
             Value::Dictionary(d.clone())
                 .to_writer_xml(file)
@@ -185,10 +187,10 @@ impl MacLaunchd {
         Ok(status::derive(job.as_ref(), uptime))
     }
     fn log_path(&self, id: &str, suffix: &str) -> PathBuf {
-        self.logs_dir.join(format!("{id}.{suffix}"))
+        definition::log_path(&self.logs_dir, id, suffix)
     }
     fn ensure_logs(&self, id: &str) -> Result<(), AppError> {
-        for (_, suffix) in plist::LOG_FILES {
+        for (_, suffix) in definition::LOG_FILES {
             secure_fs::touch_private(&self.log_path(id, suffix))?;
         }
         Ok(())
@@ -216,7 +218,7 @@ impl ServiceManager for MacLaunchd {
     fn get(&self, id: &str) -> Result<Service, AppError> {
         let d = self.read(id)?;
         Ok(Service {
-            config: plist::to_config(id, &d)?,
+            config: definition::to_config(id, &d)?,
             status: self.status(id)?,
         })
     }
@@ -244,7 +246,7 @@ impl ServiceManager for MacLaunchd {
             ));
         }
         let previous = self.read(id)?;
-        plist::check_editable(&previous)?;
+        definition::check_editable(&previous)?;
         let was_running = self.status(id)?.pid.is_some();
         self.unload(id)?;
         let change: Result<(), AppError> = (|| {
@@ -318,7 +320,7 @@ impl ServiceManager for MacLaunchd {
             }
             secure_fs::tail(&path, MAX_LOG_BYTES)
         };
-        let [(out_key, out_suffix), (err_key, err_suffix)] = plist::LOG_FILES;
+        let [(out_key, out_suffix), (err_key, err_suffix)] = definition::LOG_FILES;
         Ok(LogSnapshot {
             stdout: read(out_key, out_suffix)?,
             stderr: read(err_key, err_suffix)?,

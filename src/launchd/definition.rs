@@ -1,10 +1,16 @@
 use super::PREFIX;
 use crate::domain::{AppError, ErrorKind, ServiceConfig};
 use plist::{Dictionary, Value};
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 /// launchd output keys and the log file suffix L2D assigns to each.
 pub(super) const LOG_FILES: [(&str, &str); 2] =
     [("StandardOutPath", "log"), ("StandardErrorPath", "err.log")];
+pub(super) fn log_path(logs_dir: &Path, id: &str, suffix: &str) -> PathBuf {
+    logs_dir.join(format!("{id}.{suffix}"))
+}
 pub(super) fn label(id: &str) -> String {
     format!("{PREFIX}{id}")
 }
@@ -116,8 +122,7 @@ pub(super) fn to_plist(
         d.insert(
             key.into(),
             Value::String(
-                logs_dir
-                    .join(format!("{}.{}", c.id, suffix))
+                log_path(logs_dir, &c.id, suffix)
                     .to_string_lossy()
                     .into_owned(),
             ),
