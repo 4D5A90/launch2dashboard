@@ -24,7 +24,7 @@ Open <http://127.0.0.1:9090>. The server listens on loopback only. Ctrl-C stops 
 Without a graphical session, L2D uses the `user/<uid>` launchd domain. Start it on the remote Mac, then tunnel from your machine:
 
 ```sh
-ssh -N -L 9090:127.0.0.1:9090 user@remote-mac
+ssh -N -L 9090:127.0.0.1:9090 user@remote
 ```
 
 ## Install
