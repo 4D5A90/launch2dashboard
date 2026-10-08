@@ -130,6 +130,15 @@
                 <small id="name-help">
                     Saved as launch2dashboard.&lt;name&gt;. Use letters, numbers, hyphens or underscores.
                 </small>
+                <div class="icon-field">
+                    <div class="service-icon" id="icon-preview"></div>
+                    <label>
+                        Icon
+                        <span class="optional">optional · PNG or SVG, up to 5 MB</span>
+                        <input type="file" name="icon" accept="image/png,image/svg+xml" />
+                    </label>
+                    <button type="button" data-action="remove-icon" id="remove-icon" hidden>Remove</button>
+                </div>
                 <label>
                     Executable
                     <input name="executable" required placeholder="/absolute/path/to/executable" />
