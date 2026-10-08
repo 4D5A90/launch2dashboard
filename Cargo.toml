@@ -1,0 +1,23 @@
+[package]
+name = "launch2dashboard"
+version = "0.1.0"
+edition = "2024"
+description = "A local macOS launchd service dashboard"
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs", "net", "signal", "time", "sync", "io-util"] }
+askama = "0.16.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+plist = "1.10.1"
+async-stream = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[profile.release]
+lto = "thin"
+strip = true
