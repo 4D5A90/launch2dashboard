@@ -31,8 +31,10 @@ ssh -N -L 9090:127.0.0.1:9090 user@remote
 
 ```sh
 cargo install --path . --locked
-launch2dashboard
+sh scripts/install-agent.sh   # optional: run it as a LaunchAgent (com.<user>.launch2dashboard)
 ```
+
+Update with `sh scripts/update.sh`: pull, reinstall, restart the agent if installed.
 
 ## Develop
 
