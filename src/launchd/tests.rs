@@ -1,7 +1,7 @@
 use super::executor::{CommandResult, Executor};
 use super::testing::{response, scripted};
 use super::*;
-use std::sync::Mutex;
+use std::{collections::BTreeMap, sync::Mutex};
 #[derive(Default)]
 struct Fake {
     calls: Mutex<Vec<Vec<String>>>,

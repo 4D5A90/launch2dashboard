@@ -14,7 +14,7 @@ use executor::{Executor, ProcessExecutor};
 use secure_fs::{open_read, safe_directory, safe_regular};
 use session::LaunchDomain;
 use status::JobStatus;
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 const PREFIX: &str = "launch2dashboard.";
 const MAX_LOG_BYTES: u64 = 64 * 1024;
 
@@ -204,25 +204,10 @@ impl ServiceManager for MacLaunchd {
                 .strip_prefix(PREFIX)
                 .and_then(|n| n.strip_suffix(".plist"))
             {
-                result.push(self.get(id).unwrap_or_else(|error| Service {
-                    config: ServiceConfig {
-                        id: id.into(),
-                        executable: String::new(),
-                        arguments: vec![],
-                        working_directory: None,
-                        environment: BTreeMap::new(),
-                        autostart: false,
-                        restart_on_failure: false,
-                    },
-                    status: ServiceStatus {
-                        state: ServiceState::Error,
-                        pid: None,
-                        uptime_seconds: None,
-                        restart_count: None,
-                        last_exit_code: None,
-                        error: Some(error.message),
-                    },
-                }));
+                result.push(
+                    self.get(id)
+                        .unwrap_or_else(|error| Service::unreadable(id, error.message)),
+                );
             }
         }
         result.sort_by(|a, b| a.config.id.cmp(&b.config.id));

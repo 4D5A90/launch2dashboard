@@ -19,6 +19,30 @@ pub struct Service {
     pub config: ServiceConfig,
     pub status: ServiceStatus,
 }
+impl Service {
+    /// Placeholder for a service whose definition cannot be read, so it stays visible.
+    pub fn unreadable(id: &str, error: String) -> Self {
+        Self {
+            config: ServiceConfig {
+                id: id.into(),
+                executable: String::new(),
+                arguments: vec![],
+                working_directory: None,
+                environment: BTreeMap::new(),
+                autostart: false,
+                restart_on_failure: false,
+            },
+            status: ServiceStatus {
+                state: ServiceState::Error,
+                pid: None,
+                uptime_seconds: None,
+                restart_count: None,
+                last_exit_code: None,
+                error: Some(error),
+            },
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceStatus {
     pub state: ServiceState,
