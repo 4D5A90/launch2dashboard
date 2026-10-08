@@ -19,11 +19,33 @@ use serde::Serialize;
 use serde_json::json;
 use std::sync::Mutex;
 use std::{convert::Infallible, sync::Arc, time::Duration};
+use tokio::sync::watch;
+
+/// Ends open event streams on shutdown, so a graceful stop does not wait on them forever.
+#[derive(Clone)]
+pub struct Shutdown(watch::Receiver<bool>);
+impl Shutdown {
+    pub fn channel() -> (watch::Sender<bool>, Self) {
+        let (stop, requested) = watch::channel(false);
+        (stop, Self(requested))
+    }
+    /// For servers that never stop gracefully, such as tests.
+    pub fn never() -> Self {
+        Self::channel().1
+    }
+    async fn requested(mut self) {
+        // A dropped sender means nobody can ever request a shutdown.
+        if self.0.wait_for(|stop| *stop).await.is_err() {
+            std::future::pending::<()>().await
+        }
+    }
+}
 
 #[derive(Clone)]
 struct AppState {
     manager: Arc<dyn ServiceManager>,
     icons: Arc<dyn IconStore>,
+    shutdown: Shutdown,
     operations: Arc<Mutex<()>>,
 }
 
@@ -34,8 +56,12 @@ struct Dashboard {
     selected_id: String,
 }
 
-pub fn router(manager: Arc<dyn ServiceManager>, icons: Arc<dyn IconStore>) -> Router {
-    Router::new()
+pub fn router(
+    manager: Arc<dyn ServiceManager>,
+    icons: Arc<dyn IconStore>,
+    shutdown: Shutdown,
+) -> Router {
+    let routes = Router::new()
         .route("/", get(dashboard))
         .route("/services/{id}", get(service_page))
         .route("/static/style.css", get(stylesheet))
@@ -54,13 +80,15 @@ pub fn router(manager: Arc<dyn ServiceManager>, icons: Arc<dyn IconStore>) -> Ro
                 .put(upload_icon)
                 .delete(delete_icon)
                 .layer(DefaultBodyLimit::max(MAX_ICON_BYTES)),
-        )
+        );
+    routes
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))) })
         .layer(DefaultBodyLimit::max(64 * 1024))
         .layer(middleware::from_fn(local_requests_only))
         .with_state(AppState {
             manager,
             icons,
+            shutdown,
             operations: Arc::new(Mutex::new(())),
         })
 }
@@ -369,7 +397,10 @@ async fn stream_logs(
         timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         timer.tick().await;
         loop {
-            timer.tick().await;
+            tokio::select! {
+                _ = timer.tick() => {}
+                _ = state.shutdown.clone().requested() => break,
+            }
             let log_id = id.clone();
             match run(&state, move |manager| manager.logs(&log_id)).await {
                 Ok(snapshot) => {

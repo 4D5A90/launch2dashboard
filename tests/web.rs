@@ -4,7 +4,10 @@ use axum::{
     response::Response,
 };
 use http_body_util::BodyExt;
-use launch2dashboard::{domain::*, web::router};
+use launch2dashboard::{
+    domain::*,
+    web::{Shutdown, router},
+};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -184,7 +187,7 @@ async fn json_body(response: Response) -> Value {
 #[tokio::test]
 async fn rejects_untrusted_requests_before_touching_service_manager() {
     let manager = Arc::new(FakeManager::new());
-    let app = router(manager.clone(), icons());
+    let app = router(manager.clone(), icons(), Shutdown::never());
     for (header, value) in [
         ("host", "attacker.test:9090"),
         ("host", "127.0.0.1:9090.attacker.test"),
@@ -226,7 +229,7 @@ async fn rejects_untrusted_requests_before_touching_service_manager() {
 
 #[tokio::test]
 async fn same_origin_browser_and_local_cli_can_read_services_and_status() {
-    let app = router(Arc::new(FakeManager::new()), icons());
+    let app = router(Arc::new(FakeManager::new()), icons(), Shutdown::never());
     let mut req = request("GET", "/api/services", None);
     req.headers_mut()
         .insert("origin", "http://127.0.0.1:9090".parse().unwrap());
@@ -252,7 +255,7 @@ async fn same_origin_browser_and_local_cli_can_read_services_and_status() {
 
 #[tokio::test]
 async fn creation_returns_created_and_domain_errors_keep_their_meaning() {
-    let app = router(Arc::new(FakeManager::new()), icons());
+    let app = router(Arc::new(FakeManager::new()), icons(), Shutdown::never());
     for (id, expected) in [
         ("new-service", StatusCode::CREATED),
         ("../escape", StatusCode::BAD_REQUEST),
@@ -293,7 +296,7 @@ async fn creation_returns_created_and_domain_errors_keep_their_meaning() {
 #[tokio::test]
 async fn mutation_routes_dispatch_exact_target_and_action() {
     let manager = Arc::new(FakeManager::new());
-    let app = router(manager.clone(), icons());
+    let app = router(manager.clone(), icons(), Shutdown::never());
     let mut updated = config("example");
     updated.executable = "/bin/sleep".into();
     let response = app
@@ -349,7 +352,7 @@ async fn mutation_routes_dispatch_exact_target_and_action() {
 
 #[tokio::test]
 async fn static_assets_have_correct_types_and_security_headers() {
-    let app = router(Arc::new(FakeManager::new()), icons());
+    let app = router(Arc::new(FakeManager::new()), icons(), Shutdown::never());
     for (path, content_type) in [
         ("/static/style.css", "text/css"),
         ("/static/app.js", "text/javascript"),
@@ -382,7 +385,7 @@ async fn static_assets_have_correct_types_and_security_headers() {
 async fn logs_stream_sends_initial_snapshot_and_reports_later_failure() {
     let mut manager = FakeManager::new();
     manager.fail_later_logs = true;
-    let app = router(Arc::new(manager), icons());
+    let app = router(Arc::new(manager), icons(), Shutdown::never());
     let response = app
         .oneshot(request("GET", "/api/services/example/logs/stream", None))
         .await
@@ -429,7 +432,7 @@ async fn logs_stream_sends_initial_snapshot_and_reports_later_failure() {
 
 #[tokio::test]
 async fn missing_service_cannot_open_a_successful_logs_stream() {
-    let response = router(Arc::new(FakeManager::new()), icons())
+    let response = router(Arc::new(FakeManager::new()), icons(), Shutdown::never())
         .oneshot(request("GET", "/api/services/missing/logs/stream", None))
         .await
         .unwrap();
@@ -441,7 +444,7 @@ async fn rendered_service_data_cannot_inject_html_or_attributes() {
     let mut manager = FakeManager::new();
     manager.service.config.id = "\"><script>alert('id')</script>".into();
     manager.service.config.executable = "/bin/<img src=x onerror=alert('exec')>".into();
-    let response = router(Arc::new(manager), icons())
+    let response = router(Arc::new(manager), icons(), Shutdown::never())
         .oneshot(request("GET", "/", None))
         .await
         .unwrap();
@@ -464,7 +467,11 @@ async fn rendered_service_data_cannot_inject_html_or_attributes() {
 #[tokio::test]
 async fn uploaded_icon_is_listed_and_served_with_a_sandboxed_policy() {
     let store = icons();
-    let app = router(Arc::new(FakeManager::new()), store.clone());
+    let app = router(
+        Arc::new(FakeManager::new()),
+        store.clone(),
+        Shutdown::never(),
+    );
     let send = |req| app.clone().oneshot(req);
     let listed_icon = |body: Value| body[0]["icon"].clone();
     assert_eq!(
@@ -540,7 +547,11 @@ async fn uploaded_icon_is_listed_and_served_with_a_sandboxed_policy() {
 #[tokio::test]
 async fn icon_upload_rejects_bad_content_oversize_and_unknown_services() {
     let store = icons();
-    let app = router(Arc::new(FakeManager::new()), store.clone());
+    let app = router(
+        Arc::new(FakeManager::new()),
+        store.clone(),
+        Shutdown::never(),
+    );
     let send = |req| app.clone().oneshot(req);
     send(upload("/api/services/example/icon", PNG.to_vec()))
         .await
@@ -576,7 +587,11 @@ async fn icon_upload_rejects_bad_content_oversize_and_unknown_services() {
 #[tokio::test]
 async fn deleting_a_service_deletes_its_icon() {
     let store = icons();
-    let app = router(Arc::new(FakeManager::new()), store.clone());
+    let app = router(
+        Arc::new(FakeManager::new()),
+        store.clone(),
+        Shutdown::never(),
+    );
     let response = app
         .clone()
         .oneshot(upload("/api/services/example/icon", PNG.to_vec()))
@@ -589,4 +604,31 @@ async fn deleting_a_service_deletes_its_icon() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     assert_eq!(store.get("example").unwrap(), None);
+}
+
+#[tokio::test]
+async fn open_streams_end_when_shutdown_is_requested() {
+    let (stop, shutdown) = Shutdown::channel();
+    let app = router(Arc::new(FakeManager::new()), icons(), shutdown);
+    let paths = vec!["/api/services/example/logs/stream"];
+    let mut bodies = vec![];
+    for path in paths {
+        let response = app
+            .clone()
+            .oneshot(request("GET", path, None))
+            .await
+            .unwrap();
+        let mut body = response.into_body();
+        tokio::time::timeout(Duration::from_secs(2), body.frame())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        bodies.push((path, body));
+    }
+    stop.send(true).unwrap();
+    for (path, mut body) in bodies {
+        let end = tokio::time::timeout(Duration::from_secs(2), body.frame()).await;
+        assert!(end.unwrap().is_none(), "{path} still open after shutdown");
+    }
 }
