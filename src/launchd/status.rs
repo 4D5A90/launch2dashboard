@@ -101,6 +101,7 @@ pub(super) fn parse_elapsed(value: &str) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::testing::error_kind;
     use super::*;
     #[test]
     fn print_parser_does_not_treat_literal_braces_as_structure() {
@@ -119,9 +120,15 @@ mod tests {
                 .unwrap();
         assert_eq!(result.pid, None);
         assert_eq!(result.exit_code, Some(7));
-        assert!(JobStatus::parse("unexpected output").is_err());
-        assert!(
-            JobStatus::parse("demo = {\n\tenvironment = {\n\t\tstate = running\n\t}\n}").is_err()
+        assert_eq!(
+            error_kind(JobStatus::parse("unexpected output")),
+            ErrorKind::Command
+        );
+        assert_eq!(
+            error_kind(JobStatus::parse(
+                "demo = {\n\tenvironment = {\n\t\tstate = running\n\t}\n}"
+            )),
+            ErrorKind::Command
         );
     }
     #[test]

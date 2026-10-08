@@ -1,5 +1,5 @@
 use super::executor::{CommandResult, Executor};
-use super::testing::{response, scripted};
+use super::testing::{error_kind, response, scripted};
 use super::*;
 use std::{collections::BTreeMap, sync::Mutex};
 #[derive(Default)]
@@ -71,7 +71,7 @@ fn service_absence_is_distinct_from_domain_and_permission_errors() {
         if code == 113 {
             assert!(result.unwrap().is_none());
         } else {
-            assert!(result.is_err());
+            assert_eq!(error_kind(result), ErrorKind::Command);
         }
     }
 }
@@ -133,7 +133,7 @@ fn failed_background_bootstrap_does_not_retry_another_domain() {
     let path = manager.path("demo").unwrap().to_string_lossy().into_owned();
     let executor = scripted(vec![(&["bootstrap", "user/501", &path], response(5, ""))]);
     manager.executor = executor.clone();
-    assert!(manager.create(config()).is_err());
+    assert_eq!(error_kind(manager.create(config())), ErrorKind::Command);
     assert!(!manager.path("demo").unwrap().exists());
     assert!(executor.steps.lock().unwrap().is_empty());
 }
@@ -156,7 +156,7 @@ fn invalid_input_has_no_side_effect() {
     let (_d, m, f) = fixture();
     let mut c = config();
     c.id = "../x".into();
-    assert!(m.create(c).is_err());
+    assert_eq!(error_kind(m.create(c)), ErrorKind::Validation);
     assert!(f.calls.lock().unwrap().is_empty());
     assert_eq!(fs::read_dir(&m.agents).unwrap().count(), 0);
 }
@@ -164,7 +164,7 @@ fn invalid_input_has_no_side_effect() {
 fn failed_create_removes_plist() {
     let (_d, m, f) = fixture();
     *f.fail_bootstrap.lock().unwrap() = 1;
-    assert!(m.create(config()).is_err());
+    assert_eq!(error_kind(m.create(config())), ErrorKind::Command);
     assert!(!m.path("demo").unwrap().exists());
 }
 #[test]
@@ -204,7 +204,9 @@ fn update_preserves_unknown_keys_and_rolls_back() {
     );
     *f.fail_bootstrap.lock().unwrap() = 1;
     c.arguments = vec!["failed".into()];
-    assert!(m.update("demo", c).is_err());
+    let error = m.update("demo", c).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Command);
+    assert!(error.message.ends_with("rollback completed"), "{error}");
     assert_eq!(m.get("demo").unwrap().config.arguments, vec!["changed"]);
 }
 #[test]
@@ -219,7 +221,7 @@ fn log_tail_bounded_and_external_paths_rejected() {
         Value::String("/etc/passwd".into()),
     );
     m.write("demo", &doc).unwrap();
-    assert!(m.logs("demo").is_err());
+    assert_eq!(error_kind(m.logs("demo")), ErrorKind::Validation);
 }
 #[test]
 fn rejects_symlink_plist() {
@@ -228,7 +230,7 @@ fn rejects_symlink_plist() {
     let outside = d.path().join("outside");
     fs::write(&outside, "secret").unwrap();
     symlink(outside, m.path("demo").unwrap()).unwrap();
-    assert!(m.get("demo").is_err());
+    assert_eq!(error_kind(m.get("demo")), ErrorKind::Validation);
 }
 #[test]
 fn list_ignores_other_namespaces() {
@@ -251,7 +253,7 @@ fn logs_reject_symlink_without_reading_target() {
     let secret = dir.path().join("secret");
     fs::write(&secret, "private").unwrap();
     symlink(secret, path).unwrap();
-    assert!(manager.logs("demo").is_err());
+    assert_eq!(error_kind(manager.logs("demo")), ErrorKind::Validation);
 }
 #[test]
 fn unsupported_keepalive_is_not_silently_lost() {
@@ -263,7 +265,10 @@ fn unsupported_keepalive_is_not_silently_lost() {
     doc.insert("KeepAlive".into(), Value::Dictionary(keepalive));
     manager.write("demo", &doc).unwrap();
     fake.calls.lock().unwrap().clear();
-    assert!(manager.update("demo", config()).is_err());
+    assert_eq!(
+        error_kind(manager.update("demo", config())),
+        ErrorKind::Validation
+    );
     assert!(fake.calls.lock().unwrap().is_empty());
     assert_eq!(manager.read("demo").unwrap(), doc);
 }
@@ -320,6 +325,9 @@ fn keepalive_true_cannot_be_silently_changed() {
         let mut d = m.read("demo").unwrap();
         d.insert("KeepAlive".into(), value);
         m.write("demo", &d).unwrap();
-        assert!(m.update("demo", config()).is_err());
+        assert_eq!(
+            error_kind(m.update("demo", config())),
+            ErrorKind::Validation
+        );
     }
 }

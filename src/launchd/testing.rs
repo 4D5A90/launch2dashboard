@@ -1,5 +1,5 @@
 use super::executor::{CommandResult, Executor};
-use crate::domain::AppError;
+use crate::domain::{AppError, ErrorKind};
 use std::{collections::VecDeque, sync::Arc, sync::Mutex};
 /// Replays an exact sequence of launchctl invocations and fails on any deviation.
 pub(super) struct Scripted {
@@ -17,6 +17,10 @@ impl Executor for Scripted {
         assert_eq!(args, expected);
         Ok(result)
     }
+}
+/// The kind of an expected failure; works for success types without `Debug`.
+pub(super) fn error_kind<T>(result: Result<T, AppError>) -> ErrorKind {
+    result.err().expect("expected an error").kind
 }
 pub(super) fn response(exit: i32, stdout: &str) -> CommandResult {
     CommandResult {

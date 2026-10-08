@@ -172,7 +172,11 @@ mod tests {
     #[test]
     fn rejects_path_traversal_and_unicode() {
         for id in ["", "../foo", "a/b", "é", ".foo", "a.plist"] {
-            assert!(validate_id(id).is_err(), "{id}");
+            assert_eq!(
+                validate_id(id).unwrap_err().kind,
+                ErrorKind::Validation,
+                "{id}"
+            );
         }
         assert!(validate_id("llama-swap_2").is_ok());
     }
@@ -187,6 +191,6 @@ mod tests {
             autostart: false,
             restart_on_failure: true,
         };
-        assert!(c.validate().is_err());
+        assert_eq!(c.validate().unwrap_err().kind, ErrorKind::Validation);
     }
 }
