@@ -33,3 +33,16 @@ Périmètre : plan fourni et maquette, demande d'implémentation utilisateur ; �
 - [x] Corriger la sélection du domaine, les plists et les lectures d’état avec tests de régression.
 - [x] Valider les gates et un service temporaire distant.
 - [x] Livrer le binaire corrigé et documenter la preuve.
+
+## Découpage de l’adapter launchd
+
+Périmètre : refactor sans changement de comportement, suite à revue ; baseline 24 tests unitaires + 8 HTTP verts.
+
+- [x] Découper `src/launchd.rs` en `launchd/{mod,executor,session,status,definition,secure_fs}.rs`, tests dans `launchd/tests.rs`.
+- [x] Rendre purs le calcul de statut et la conversion plist ; déplacer leurs tests dans leur module, sans tempdir ni exécuteur.
+- [x] Remplacer `action: &str` par `enum ServiceAction` dans le domaine.
+- [x] Ajouter `Service::unreadable` ; vérifier `ErrorKind` au lieu de `is_err()` dans les tests.
+- [x] Gates verts à chaque commit.
+
+### Revue
+6 commits sur `refactor/split-launchd`, gates verts à chaque commit (fmt, check, test, clippy -D warnings) : 29 tests unitaires + 8 HTTP, contre 24 + 8 au départ. Revue `quality-reviewer` : aucun changement de comportement face à `main`. Elle a montré que le câblage `MacLaunchd::new` → `detect` n’était plus testé (une mutation restait verte). Un test passant par `MacLaunchd::new` le couvre maintenant, et la même mutation le fait échouer. Module `plist` renommé `definition` (collision avec la crate) ; `log_path` partagé.
