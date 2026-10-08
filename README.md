@@ -2,18 +2,19 @@
 
 Local macOS dashboard for the `launchd` services in the `launch2dashboard.*` namespace. A single Rust binary, with the UI embedded.
 
-## Install
-
 Requires macOS and [Rust stable](https://rust-lang.org/tools/install/). Run as your normal user, not with `sudo`.
 
+## Quick start
+
 ```sh
-cargo install --path . --locked
+cargo run --locked
 ```
 
-## Run
+Or build once and run the binary:
 
 ```sh
-launch2dashboard
+cargo build --release --locked
+./target/release/launch2dashboard
 ```
 
 Open <http://127.0.0.1:9090>. The server listens on loopback only. Ctrl-C stops L2D; the services keep running under launchd.
@@ -26,10 +27,16 @@ Without a graphical session, L2D uses the `user/<uid>` launchd domain. Start it 
 ssh -N -L 9090:127.0.0.1:9090 user@remote-mac
 ```
 
-## Develop
+## Install
 
 ```sh
-cargo run --locked
+cargo install --path . --locked
+launch2dashboard
+```
+
+## Checks
+
+```sh
 sh scripts/check.sh   # fmt, check, test, clippy
 ```
 
