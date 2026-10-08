@@ -303,26 +303,20 @@ impl ServiceManager for MacLaunchd {
         fs::remove_file(self.path(id)?)?;
         Ok(())
     }
-    fn action(&self, id: &str, action: &str) -> Result<Service, AppError> {
+    fn action(&self, id: &str, action: ServiceAction) -> Result<Service, AppError> {
         self.read(id)?;
         match action {
-            "stop" => self.unload(id)?,
-            "start" | "restart" => {
+            ServiceAction::Stop => self.unload(id)?,
+            ServiceAction::Start | ServiceAction::Restart => {
                 if !self.loaded(id)? {
                     self.bootstrap(id)?;
                 }
                 let mut args = vec!["kickstart".into()];
-                if action == "restart" {
+                if action == ServiceAction::Restart {
                     args.push("-k".into());
                 }
                 args.push(self.target(id));
                 self.call(args)?;
-            }
-            _ => {
-                return Err(AppError::new(
-                    ErrorKind::Validation,
-                    "Unknown service action",
-                ));
             }
         }
         self.get(id)

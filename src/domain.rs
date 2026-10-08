@@ -36,6 +36,12 @@ pub enum ServiceState {
     Starting,
     Error,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceAction {
+    Start,
+    Stop,
+    Restart,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogSnapshot {
     pub stdout: String,
@@ -79,7 +85,7 @@ pub trait ServiceManager: Send + Sync {
     fn create(&self, config: ServiceConfig) -> Result<Service, AppError>;
     fn update(&self, id: &str, config: ServiceConfig) -> Result<Service, AppError>;
     fn delete(&self, id: &str) -> Result<(), AppError>;
-    fn action(&self, id: &str, action: &str) -> Result<Service, AppError>;
+    fn action(&self, id: &str, action: ServiceAction) -> Result<Service, AppError>;
     fn logs(&self, id: &str) -> Result<LogSnapshot, AppError>;
 }
 pub fn validate_id(id: &str) -> Result<(), AppError> {

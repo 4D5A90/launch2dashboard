@@ -114,8 +114,8 @@ fn ssh_mutations_and_status_keep_same_domain_and_upgrade_old_plist() {
         ),
     ]);
     manager.executor = executor.clone();
-    manager.action("demo", "start").unwrap();
-    manager.action("demo", "stop").unwrap();
+    manager.action("demo", ServiceAction::Start).unwrap();
+    manager.action("demo", ServiceAction::Stop).unwrap();
     assert!(executor.steps.lock().unwrap().is_empty());
     let written = manager.read("demo").unwrap();
     assert_eq!(
@@ -142,7 +142,7 @@ fn create_roundtrip_and_stop_boots_out() {
     let (_d, m, f) = fixture();
     let c = config();
     assert_eq!(m.create(c.clone()).unwrap().config, c);
-    m.action("demo", "stop").unwrap();
+    m.action("demo", ServiceAction::Stop).unwrap();
     assert!(
         f.calls
             .lock()

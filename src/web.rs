@@ -1,4 +1,4 @@
-use crate::domain::{AppError, ErrorKind, Service, ServiceConfig, ServiceManager};
+use crate::domain::{AppError, ErrorKind, Service, ServiceAction, ServiceConfig, ServiceManager};
 use askama::Template;
 use axum::{
     Json, Router,
@@ -218,7 +218,7 @@ async fn delete(
 async fn action(
     state: AppState,
     id: String,
-    action: &'static str,
+    action: ServiceAction,
 ) -> Result<Json<Service>, HttpError> {
     run(&state, move |manager| manager.action(&id, action))
         .await
@@ -228,19 +228,19 @@ async fn start(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Service>, HttpError> {
-    action(state, id, "start").await
+    action(state, id, ServiceAction::Start).await
 }
 async fn stop(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Service>, HttpError> {
-    action(state, id, "stop").await
+    action(state, id, ServiceAction::Stop).await
 }
 async fn restart(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Service>, HttpError> {
-    action(state, id, "restart").await
+    action(state, id, ServiceAction::Restart).await
 }
 async fn logs(
     State(state): State<AppState>,

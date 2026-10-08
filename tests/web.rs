@@ -95,8 +95,8 @@ impl ServiceManager for FakeManager {
         self.record(format!("delete:{id}"));
         self.check(id)
     }
-    fn action(&self, id: &str, action: &str) -> Result<Service, AppError> {
-        self.record(format!("action:{id}:{action}"));
+    fn action(&self, id: &str, action: ServiceAction) -> Result<Service, AppError> {
+        self.record(format!("action:{id}:{action:?}"));
         self.check(id)?;
         Ok(self.service.clone())
     }
@@ -289,9 +289,9 @@ async fn mutation_routes_dispatch_exact_target_and_action() {
         *manager.calls.lock().unwrap(),
         [
             "update:example:/bin/sleep",
-            "action:example:start",
-            "action:example:stop",
-            "action:example:restart",
+            "action:example:Start",
+            "action:example:Stop",
+            "action:example:Restart",
             "delete:example"
         ]
     );
