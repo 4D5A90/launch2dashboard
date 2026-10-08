@@ -606,11 +606,41 @@ async fn deleting_a_service_deletes_its_icon() {
     assert_eq!(store.get("example").unwrap(), None);
 }
 
+#[cfg(debug_assertions)]
+#[tokio::test]
+async fn debug_builds_reload_open_pages_after_a_restart() {
+    let app = router(Arc::new(FakeManager::new()), icons(), Shutdown::never());
+    let page = app
+        .clone()
+        .oneshot(request("GET", "/", None))
+        .await
+        .unwrap();
+    let html = page.into_body().collect().await.unwrap().to_bytes();
+    assert!(String::from_utf8_lossy(&html).contains("data-dev-reload"));
+    let response = app
+        .oneshot(request("GET", "/dev/reload", None))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "text/event-stream");
+    let first = tokio::time::timeout(Duration::from_secs(2), response.into_body().frame())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .into_data()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&first).contains("retry: 500"));
+}
+
 #[tokio::test]
 async fn open_streams_end_when_shutdown_is_requested() {
     let (stop, shutdown) = Shutdown::channel();
     let app = router(Arc::new(FakeManager::new()), icons(), shutdown);
-    let paths = vec!["/api/services/example/logs/stream"];
+    let mut paths = vec!["/api/services/example/logs/stream"];
+    if cfg!(debug_assertions) {
+        paths.push("/dev/reload");
+    }
     let mut bodies = vec![];
     for path in paths {
         let response = app

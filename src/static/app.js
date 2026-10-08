@@ -281,6 +281,13 @@
   window.addEventListener('popstate', () => { const match = location.pathname.match(/^\/services\/([^/]+)$/); select(match ? decodeURIComponent(match[1]) : '', false); });
   window.addEventListener('pagehide', disconnect);
   window.addEventListener('pageshow', () => { if (selected && !source) renderDetail(); });
+  if ('devReload' in document.body.dataset) {
+    // Dev server only: EventSource retries while bacon rebuilds, then the page reloads.
+    let lost = false;
+    const reload = new EventSource('/dev/reload');
+    reload.onerror = () => { lost = true; };
+    reload.onopen = () => { if (lost) location.reload(); };
+  }
   void refresh();
   setInterval(() => { if (!document.hidden) void refresh(); }, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });

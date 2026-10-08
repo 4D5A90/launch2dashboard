@@ -10,7 +10,7 @@
     <script src="/static/app.js" defer></script>
 </head>
 
-<body data-selected-id="{{ selected_id }}">
+<body data-selected-id="{{ selected_id }}" {% if dev_reload %}data-dev-reload{% endif %}>
     <a class="skip-link" href="#main">Skip to services</a>
     <aside class="sidebar">
         <a class="brand" href="/" aria-label="L2D home">

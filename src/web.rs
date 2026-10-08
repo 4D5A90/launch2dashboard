@@ -54,6 +54,7 @@ struct AppState {
 struct Dashboard {
     services: Vec<Service>,
     selected_id: String,
+    dev_reload: bool,
 }
 
 pub fn router(
@@ -81,6 +82,9 @@ pub fn router(
                 .delete(delete_icon)
                 .layer(DefaultBodyLimit::max(MAX_ICON_BYTES)),
         );
+    // Debug builds reload open pages when the dev server restarts (`bacon run`).
+    #[cfg(debug_assertions)]
+    let routes = routes.route("/dev/reload", get(dev_reload));
     routes
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({"error": "Not found"}))) })
         .layer(DefaultBodyLimit::max(64 * 1024))
@@ -196,6 +200,7 @@ async fn render(state: AppState, selected_id: String) -> Result<Html<String>, Ht
     Dashboard {
         services,
         selected_id,
+        dev_reload: cfg!(debug_assertions),
     }
     .render()
     .map(Html)
@@ -422,6 +427,17 @@ async fn stream_logs(
         .into_response())
 }
 
+/// Stays open until the server stops; the page reloads once it can reconnect.
+#[cfg(debug_assertions)]
+async fn dev_reload(State(state): State<AppState>) -> Response {
+    let stream = async_stream::stream! {
+        yield Ok::<Event, Infallible>(Event::default().retry(Duration::from_millis(500)).comment("ready"));
+        state.shutdown.requested().await;
+    };
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
+}
 async fn stylesheet() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
