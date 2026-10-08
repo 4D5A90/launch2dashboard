@@ -34,7 +34,17 @@ cargo install --path . --locked
 launch2dashboard
 ```
 
-## Checks
+## Develop
+
+With [bacon](https://dystroy.org/bacon/) (`brew install bacon`), the server rebuilds and restarts on every change:
+
+```sh
+bacon run
+```
+
+Refresh the browser after a restart. In bacon, `c` runs clippy, `t` the tests.
+
+Before committing:
 
 ```sh
 sh scripts/check.sh   # fmt, check, test, clippy

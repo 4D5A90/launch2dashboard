@@ -1,0 +1,27 @@
+#:schema https://dystroy.org/bacon/.bacon.schema.json
+# Config reference: https://dystroy.org/bacon/config/
+
+default_job = "check"
+env.CARGO_TERM_COLOR = "always"
+
+[jobs.check]
+command = ["cargo", "check", "--all-targets"]
+need_stdout = false
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+need_stdout = false
+
+[jobs.test]
+command = ["cargo", "test"]
+need_stdout = true
+
+# Dev server on 127.0.0.1:9090, rebuilt and restarted on every change.
+[jobs.run]
+command = ["cargo", "run"]
+need_stdout = true
+allow_warnings = true
+background = false
+on_change_strategy = "kill_then_restart"
+# Kill the server spawned by cargo too, otherwise it keeps port 9090.
+kill = ["pkill", "-TERM", "-P"]
