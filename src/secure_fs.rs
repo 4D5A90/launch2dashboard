@@ -4,8 +4,14 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom},
     os::unix::fs::OpenOptionsExt,
-    path::Path,
+    path::{Path, PathBuf},
 };
+pub(crate) fn home_directory() -> Result<PathBuf, AppError> {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .ok_or_else(|| AppError::new(ErrorKind::Io, "HOME must be an absolute directory"))
+}
 pub(crate) fn safe_directory(path: &Path) -> Result<(), AppError> {
     for ancestor in path.ancestors() {
         if let Ok(m) = fs::symlink_metadata(ancestor)

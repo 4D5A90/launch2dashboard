@@ -112,6 +112,68 @@ pub trait ServiceManager: Send + Sync {
     fn action(&self, id: &str, action: ServiceAction) -> Result<Service, AppError>;
     fn logs(&self, id: &str) -> Result<LogSnapshot, AppError>;
 }
+pub const MAX_ICON_BYTES: usize = 5 * 1024 * 1024;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IconFormat {
+    Png,
+    Svg,
+}
+impl IconFormat {
+    pub fn media_type(self) -> &'static str {
+        match self {
+            Self::Png => "image/png",
+            Self::Svg => "image/svg+xml",
+        }
+    }
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Svg => "svg",
+        }
+    }
+}
+/// A service icon whose format was checked from its content, never from a name or header.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Icon {
+    format: IconFormat,
+    bytes: Vec<u8>,
+}
+impl Icon {
+    pub fn parse(bytes: Vec<u8>) -> Result<Self, AppError> {
+        if bytes.len() > MAX_ICON_BYTES {
+            return Err(AppError::new(
+                ErrorKind::Validation,
+                "Icon must be 5 MB or smaller",
+            ));
+        }
+        let format = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            IconFormat::Png
+        } else if std::str::from_utf8(&bytes)
+            .is_ok_and(|text| text.to_ascii_lowercase().contains("<svg"))
+        {
+            IconFormat::Svg
+        } else {
+            return Err(AppError::new(
+                ErrorKind::Validation,
+                "Icon must be a PNG or SVG image",
+            ));
+        };
+        Ok(Self { format, bytes })
+    }
+    pub fn format(&self) -> IconFormat {
+        self.format
+    }
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+pub trait IconStore: Send + Sync {
+    fn get(&self, id: &str) -> Result<Option<Icon>, AppError>;
+    /// Opaque token that changes whenever the icon is replaced.
+    fn version(&self, id: &str) -> Result<Option<String>, AppError>;
+    fn put(&self, id: &str, icon: &Icon) -> Result<(), AppError>;
+    fn delete(&self, id: &str) -> Result<(), AppError>;
+}
 pub fn validate_id(id: &str) -> Result<(), AppError> {
     if id.is_empty()
         || id.len() > 100
@@ -192,5 +254,35 @@ mod tests {
             restart_on_failure: true,
         };
         assert_eq!(c.validate().unwrap_err().kind, ErrorKind::Validation);
+    }
+    #[test]
+    fn icon_format_comes_from_content() {
+        let png = b"\x89PNG\r\n\x1a\nrest".to_vec();
+        assert_eq!(Icon::parse(png).unwrap().format(), IconFormat::Png);
+        for svg in [
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+            "\u{feff}<?xml version=\"1.0\"?>\n<!-- logo -->\n<SVG viewBox=\"0 0 1 1\"></SVG>",
+        ] {
+            let icon = Icon::parse(svg.as_bytes().to_vec()).unwrap();
+            assert_eq!(icon.format(), IconFormat::Svg);
+            assert_eq!(icon.bytes(), svg.as_bytes());
+        }
+    }
+    #[test]
+    fn icon_rejects_other_content_and_oversize() {
+        let mut huge = b"\x89PNG\r\n\x1a\n".to_vec();
+        huge.resize(MAX_ICON_BYTES + 1, 0);
+        for bytes in [
+            vec![],
+            b"GIF89a".to_vec(),
+            b"<html><body>not an icon</body></html>".to_vec(),
+            vec![0xff, 0xfe, b'<', b's', b'v', b'g'],
+            huge,
+        ] {
+            assert_eq!(Icon::parse(bytes).unwrap_err().kind, ErrorKind::Validation);
+        }
+        let mut max = b"\x89PNG\r\n\x1a\n".to_vec();
+        max.resize(MAX_ICON_BYTES, 0);
+        assert!(Icon::parse(max).is_ok());
     }
 }

@@ -31,10 +31,7 @@ impl MacLaunchd {
                 "launch2dashboard requires macOS launchd",
             ));
         }
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .ok_or_else(|| AppError::new(ErrorKind::Io, "HOME must be an absolute directory"))?;
+        let home = secure_fs::home_directory()?;
         let executor = Arc::new(ProcessExecutor);
         let result = executor.run("/usr/bin/id", &["-u".into()])?;
         let uid = result
