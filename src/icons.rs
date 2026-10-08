@@ -27,15 +27,19 @@ impl FsIconStore {
         Ok(self.dir.join(format!("{id}.{}", format.extension())))
     }
     /// The stored file for `id`, if any; symlinks and other non-regular files are refused.
+    /// The newest one wins if an interrupted `put` left both formats behind.
     fn existing(&self, id: &str) -> Result<Option<PathBuf>, AppError> {
+        let mut newest = None;
         for format in FORMATS {
             let path = self.path(id, format)?;
             secure_fs::safe_regular(&path, true)?;
-            if path.exists() {
-                return Ok(Some(path));
+            if let Ok(modified) = fs::symlink_metadata(&path).and_then(|m| m.modified())
+                && newest.as_ref().is_none_or(|(time, _)| modified > *time)
+            {
+                newest = Some((modified, path));
             }
         }
-        Ok(None)
+        Ok(newest.map(|(_, path)| path))
     }
 }
 const FORMATS: [IconFormat; 2] = [IconFormat::Png, IconFormat::Svg];
@@ -125,6 +129,22 @@ mod tests {
         assert_ne!(store.version("demo").unwrap().unwrap(), first);
         store.delete("demo").unwrap();
         assert_eq!(store.version("demo").unwrap(), None);
+    }
+    #[test]
+    fn version_changes_when_an_icon_of_the_same_size_replaces_another() {
+        let (_dir, store) = store();
+        store.put("demo", &icon(b"\x89PNG\r\n\x1a\nfirst")).unwrap();
+        let first = store.version("demo").unwrap();
+        store.put("demo", &icon(b"\x89PNG\r\n\x1a\nother")).unwrap();
+        assert_ne!(store.version("demo").unwrap(), first);
+    }
+    #[test]
+    fn newest_file_wins_when_an_interrupted_put_left_both_formats() {
+        let (_dir, store) = store();
+        fs::write(store.dir.join("demo.png"), PNG).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        fs::write(store.dir.join("demo.svg"), SVG).unwrap();
+        assert_eq!(store.get("demo").unwrap(), Some(icon(SVG)));
     }
     #[test]
     fn delete_is_idempotent() {

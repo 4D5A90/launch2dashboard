@@ -297,7 +297,11 @@ async fn delete(
     let icons = Arc::clone(&state.icons);
     run(&state, move |manager| {
         manager.delete(&id)?;
-        icons.delete(&id)
+        // The service is gone either way; a leftover icon is only disk space.
+        if let Err(error) = icons.delete(&id) {
+            eprintln!("Could not delete icon of {id}: {error}");
+        }
+        Ok(())
     })
     .await?;
     Ok(StatusCode::NO_CONTENT)

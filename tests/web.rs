@@ -694,3 +694,25 @@ async fn every_response_except_versioned_icons_is_never_cached() {
         assert!(policy.contains("frame-ancestors 'none'"), "{path}");
     }
 }
+
+#[tokio::test]
+async fn icon_routes_answer_404_for_unknown_services() {
+    let store = icons();
+    store
+        .put("missing", &Icon::parse(PNG.to_vec()).unwrap())
+        .unwrap();
+    let app = router(
+        Arc::new(FakeManager::new()),
+        store.clone(),
+        Shutdown::never(),
+    );
+    for method in ["GET", "DELETE"] {
+        let response = app
+            .clone()
+            .oneshot(request(method, "/api/services/missing/icon", None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method}");
+    }
+    assert!(store.get("missing").unwrap().is_some());
+}
