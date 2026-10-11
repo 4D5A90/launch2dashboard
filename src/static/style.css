@@ -363,6 +363,55 @@ input::placeholder,textarea::placeholder {
   width:13px;
   height:13px
 }
+.workspace.has-selection {
+  grid-template-columns:minmax(300px,380px) minmax(0,1fr)
+}
+.has-selection .service-list {
+  gap:8px
+}
+.has-selection .service-card {
+  grid-template-columns:32px minmax(0,1fr);
+  align-items:center;
+  gap:12px;
+  padding:10px 12px
+}
+.has-selection .service-card>.service-icon {
+  display:grid;
+  width:32px;
+  height:32px;
+  border-radius:8px
+}
+.has-selection .service-card .service-icon svg {
+  width:18px;
+  height:18px
+}
+.has-selection .card-body {
+  display:flex;
+  align-items:center;
+  gap:10px
+}
+.has-selection .card-top {
+  flex:1;
+  min-width:0;
+  flex-wrap:nowrap
+}
+.has-selection .service-card h2 {
+  font-size:14px;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+.has-selection .service-card .command,.has-selection .metrics-inline {
+  display:none
+}
+.has-selection .card-bottom {
+  margin-top:0;
+  flex-wrap:nowrap
+}
+.has-selection .terminal {
+  max-height:45vh
+}
 .detail {
   border:1px solid var(--line);
   border-radius:12px;
@@ -764,7 +813,7 @@ dialog::backdrop {
   .search {
     flex:1
   }
-  .workspace {
+  .workspace,.workspace.has-selection {
     grid-template-columns:1fr
   }
   .detail-placeholder {

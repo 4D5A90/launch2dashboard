@@ -65,7 +65,7 @@
     const query = $('#search').value.toLowerCase();
     for (const key of ['all', 'running', 'stopped', 'error']) $('#count-' + key).textContent = key === 'all' ? services.length : services.filter((service) => state(service) === key).length;
     const visible = services.filter((service) => (filter === 'all' || state(service) === filter) && `${service.config.id} ${service.config.executable}`.toLowerCase().includes(query));
-    list.innerHTML = visible.map((service) => `<article class="service-card ${selected === service.config.id ? 'selected' : ''}">${serviceIcon(service)}<div><div class="card-top"><h2><a data-select="${escape(service.config.id)}" href="/services/${encodeURIComponent(service.config.id)}">${escape(service.config.id)}</a></h2>${badge(service)}</div><p class="command" title="${escape(service.config.executable)}">${escape(service.config.executable)}</p><div class="card-bottom"><div class="metrics-inline"><span>PID ${escape(service.status.pid ?? '—')}</span><span>Uptime ${duration(service.status.uptime_seconds)}</span></div><div class="card-actions">${actionButtons(service)}</div></div></div></article>`).join('') || `<div class="empty-state"><div class="service-icon">${serverIcon}</div><h2>${services.length ? 'No matching services' : 'Make room for your next service'}</h2><p>${services.length ? 'Try another search or choose a different status.' : 'Add an executable and let launchd handle the rest. Your local services will appear here.'}</p><button ${services.length ? 'data-action="clear-filters"' : 'class="primary" data-action="create"'}>${services.length ? 'Clear filters' : 'Add your first service'}</button></div>`;
+    list.innerHTML = visible.map((service) => `<article class="service-card ${selected === service.config.id ? 'selected' : ''}">${serviceIcon(service)}<div class="card-body"><div class="card-top"><h2><a data-select="${escape(service.config.id)}" href="/services/${encodeURIComponent(service.config.id)}">${escape(service.config.id)}</a></h2>${badge(service)}</div><p class="command" title="${escape(service.config.executable)}">${escape(service.config.executable)}</p><div class="card-bottom"><div class="metrics-inline"><span>PID ${escape(service.status.pid ?? '—')}</span><span>Uptime ${duration(service.status.uptime_seconds)}</span></div><div class="card-actions">${actionButtons(service)}</div></div></div></article>`).join('') || `<div class="empty-state"><div class="service-icon">${serverIcon}</div><h2>${services.length ? 'No matching services' : 'Make room for your next service'}</h2><p>${services.length ? 'Try another search or choose a different status.' : 'Add an executable and let launchd handle the rest. Your local services will appear here.'}</p><button ${services.length ? 'data-action="clear-filters"' : 'class="primary" data-action="create"'}>${services.length ? 'Clear filters' : 'Add your first service'}</button></div>`;
     list.setAttribute('aria-busy', 'false');
   }
   function facts(entries) {
@@ -73,6 +73,8 @@
   }
   function renderDetail() {
     const service = services.find((entry) => entry.config.id === selected);
+    // A selection compacts the list so the detail and its logs get the room.
+    list.parentElement.classList.toggle('has-selection', Boolean(service));
     if (!service) { detail.innerHTML = placeholder; disconnect(); return; }
     const logPositions = ['stdout', 'stderr'].map((channel) => {
       const node = $('#' + channel);

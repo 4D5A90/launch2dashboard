@@ -146,7 +146,7 @@ La hiérarchie observée est portée par `page-title`, `detail-title`, `service-
 
 ## Layout
 
-Pas de navigation latérale : le dashboard n’a qu’une destination, et les cartes donnent déjà accès à chaque service. Le logo L2D précède le titre de page. Le contenu occupe toute la largeur et possède un padding de 30px 26px 16px. La liste et le détail forment deux colonnes `minmax(320px,1.25fr) minmax(340px,1fr)` séparées de 16px. Les cartes ont 20px de padding et 12px entre elles.
+Pas de navigation latérale : le dashboard n’a qu’une destination, et les cartes donnent déjà accès à chaque service. Le logo L2D précède le titre de page. Le contenu occupe toute la largeur et possède un padding de 30px 26px 16px. La liste et le détail forment deux colonnes `minmax(320px,1.25fr) minmax(340px,1fr)` séparées de 16px. Les cartes ont 20px de padding et 12px entre elles. Dès qu’un service est sélectionné, la liste se réduit à `minmax(300px,380px)` et les cartes passent sur une ligne (icône 32px, nom, badge, actions) ; chemin, PID et uptime ne restent que dans le détail, dont les logs montent à 45vh. Sous 950px, les colonnes restent empilées.
 
 À 1550px et au-delà, les marges, cartes et intercolonnes respirent davantage. À 1200px et moins, les cartes ont 18px de padding et perdent leur icône. À 950px et moins, les panneaux s’empilent et les icônes reviennent. À 600px et moins, les cartes ont 16px de padding. Les filtres et actions peuvent revenir à la ligne.
 
