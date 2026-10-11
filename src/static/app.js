@@ -73,7 +73,7 @@
     try {
       const args = splitArguments(form.elements.arguments.value);
       preview.classList.remove('invalid');
-      preview.innerHTML = args.length ? `<span>${args.length} argument${args.length > 1 ? 's' : ''}</span>${args.map((arg) => `<code>${arg ? escape(arg) : '<i>empty</i>'}</code>`).join('')}` : '<span>No arguments</span>';
+      preview.innerHTML = args.length ? `<span>${args.length} argument${args.length > 1 ? 's' : ''}</span>${args.map((arg) => `<code>${arg ? escape(arg) : '<i>empty</i>'}</code>`).join('')}` : '';
     } catch (error) {
       preview.classList.add('invalid');
       preview.textContent = error.message;

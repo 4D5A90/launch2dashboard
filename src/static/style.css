@@ -742,6 +742,9 @@ dialog::backdrop {
 .args-preview i {
   color:var(--muted)
 }
+.args-preview:empty {
+  display:none
+}
 .args-preview.invalid {
   color:var(--red)
 }
