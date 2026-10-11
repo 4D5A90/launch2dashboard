@@ -23,7 +23,7 @@ The release binary includes the HTML, CSS and JavaScript and can run from anothe
 
 ## Services
 
-Managed plists live in `~/Library/LaunchAgents/launch2dashboard.<id>.plist`. Create services with an absolute executable path, one argument per line, an optional absolute working directory, and one `KEY=value` environment entry per line. Arguments are passed directly to launchd, without shell expansion. Use the actual path instead of `~`, `$HOME` or shell redirection.
+Managed plists live in `~/Library/LaunchAgents/launch2dashboard.<id>.plist`. Create services with an absolute executable path, arguments on one line, an optional absolute working directory, and one `KEY=value` environment entry per line. The form splits arguments like a shell — spaces separate them, `"…"`, `'…'` and `\` group them — and previews the resulting list as you type. They are passed to launchd as that exact list, without expansion: use the actual path instead of `~`, `$HOME` or shell redirection. The API itself takes `arguments` as a JSON array.
 
 - **Start** loads an unloaded service and requests a launch.
 - **Stop** unloads the job, including jobs configured to restart. It does not change its next-login autostart setting.

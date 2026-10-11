@@ -40,6 +40,45 @@
   };
   const actionButton = (action, service) => `<button class="act act-${action}" data-action="${action}" data-id="${escape(service.config.id)}"${pending.has(service.config.id) ? ' disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${actionIcons[action]}</svg>${action[0].toUpperCase() + action.slice(1)}</button>`;
   const actionButtons = (service) => actionButton(['running', 'starting'].includes(state(service)) ? 'stop' : 'start', service) + actionButton('restart', service);
+  // Arguments are typed on one line and split like a shell would, quotes and backslashes included,
+  // but never expanded: launchd receives the exact list shown in the preview.
+  function splitArguments(text) {
+    const args = [];
+    let current = null;
+    let quote = null;
+    for (let index = 0; index < text.length; index++) {
+      const char = text[index];
+      if (quote === "'") { if (char === "'") quote = null; else current += char; continue; }
+      if (quote === '"') {
+        if (char === '"') quote = null;
+        else if (char === '\\' && '"\\$`'.includes(text[index + 1] ?? '')) current += text[++index];
+        else current += char;
+        continue;
+      }
+      if (/\s/.test(char)) { if (current !== null) args.push(current); current = null; continue; }
+      current ??= '';
+      if (char === "'" || char === '"') quote = char;
+      else if (char === '\\') {
+        if (index + 1 === text.length) throw new Error('Arguments end with a lone backslash.');
+        current += text[++index];
+      } else current += char;
+    }
+    if (quote) throw new Error(`Arguments have an unclosed ${quote === '"' ? 'double' : 'single'} quote.`);
+    if (current !== null) args.push(current);
+    return args;
+  }
+  const quoteArgument = (arg) => /^[A-Za-z0-9_@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`;
+  function previewArguments() {
+    const preview = $('#args-preview');
+    try {
+      const args = splitArguments(form.elements.arguments.value);
+      preview.classList.remove('invalid');
+      preview.innerHTML = args.length ? `<span>${args.length} argument${args.length > 1 ? 's' : ''}</span>${args.map((arg) => `<code>${arg ? escape(arg) : '<i>empty</i>'}</code>`).join('')}` : '<span>No arguments</span>';
+    } catch (error) {
+      preview.classList.add('invalid');
+      preview.textContent = error.message;
+    }
+  }
   function showError(selector, message) {
     const node = $(selector);
     node.textContent = message || '';
@@ -191,7 +230,8 @@
     $('#remove-icon').hidden = !current?.icon;
     for (const name of ['id', 'executable', 'working_directory']) form.elements[name].value = config?.[name] || '';
     form.elements.id.disabled = Boolean(id);
-    form.elements.arguments.value = config?.arguments.join('\n') || '';
+    form.elements.arguments.value = config?.arguments.map(quoteArgument).join(' ') || '';
+    previewArguments();
     form.elements.environment.value = config ? Object.entries(config.environment).map(([key, value]) => `${key}=${value}`).join('\n') : '';
     form.elements.autostart.checked = config?.autostart ?? true;
     form.elements.restart_on_failure.checked = config?.restart_on_failure ?? false;
@@ -255,6 +295,7 @@
     reader.readAsDataURL(file);
   });
   form.elements.restart_on_failure.addEventListener('change', () => { if (form.elements.restart_on_failure.checked) form.elements.autostart.checked = true; });
+  form.elements.arguments.addEventListener('input', previewArguments);
   form.elements.autostart.addEventListener('change', () => { if (!form.elements.autostart.checked) form.elements.restart_on_failure.checked = false; });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -269,7 +310,7 @@
         if (Object.hasOwn(environment, key)) throw new Error(`Environment key ${key} is repeated.`);
         environment[key] = line.slice(position + 1);
       }
-      const config = { id: form.elements.id.value.trim(), executable: form.elements.executable.value.trim(), arguments: form.elements.arguments.value.split('\n').filter((line) => line !== ''), working_directory: form.elements.working_directory.value.trim() || null, environment, autostart: form.elements.autostart.checked, restart_on_failure: form.elements.restart_on_failure.checked };
+      const config = { id: form.elements.id.value.trim(), executable: form.elements.executable.value.trim(), arguments: splitArguments(form.elements.arguments.value), working_directory: form.elements.working_directory.value.trim() || null, environment, autostart: form.elements.autostart.checked, restart_on_failure: form.elements.restart_on_failure.checked };
       if (!config.executable.startsWith('/') || (config.working_directory && !config.working_directory.startsWith('/'))) throw new Error('Executable and working directory must be absolute paths beginning with /.');
       $('#save-service').disabled = true;
       await request(editing ? endpoint(editing) : '/api/services', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(config) });

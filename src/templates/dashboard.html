@@ -121,10 +121,11 @@
                 </label>
                 <label>
                     Arguments
-                    <textarea name="arguments" rows="3" placeholder="--port&#10;8080"
-                        aria-describedby="args-help"></textarea>
+                    <textarea name="arguments" rows="2" placeholder='--port 8080 --name "my app"'
+                        spellcheck="false" aria-describedby="args-help args-preview"></textarea>
                 </label>
-                <small id="args-help">One argument per line. No shell quoting or expansion.</small>
+                <small id="args-help">Separated by spaces, like a shell: group with "…", '…' or \. Never expanded: no $VAR, ~ or *.</small>
+                <div id="args-preview" class="args-preview"></div>
                 <label>
                     Working directory
                     <span class="optional">optional</span>
