@@ -4,7 +4,7 @@ Mode: Operate
 
 Autorité visuelle : ./dashboard-mockup.png fournie par l'utilisateur. Reproduction de son système, sans nouvelle direction artistique.
 
-FIRST VIEWPORT: logo L2D et titre Services avec recherche et Add Service, filtres d'état, liste centrale et panneau de détail droit. Violet pour sélection et action primaire, vert/gris/ambre/rouge pour états accompagnés de texte.
+FIRST VIEWPORT: logo L2D et titre « launchd Dashboard » avec recherche et Add Service, filtres d'état, liste centrale et panneau de détail droit. Violet pour sélection et action primaire, vert/gris/ambre/rouge pour états accompagnés de texte.
 
 Les données sont réelles. Sur installation vide, la liste montre un état vide et une action de création. Les mesures CPU/RAM, hosts distants et onglets hors V1 ne sont pas reproduits. Sur mobile, colonnes empilées. Sélection service, actions et flux de logs sont les interactions centrales.
 

@@ -203,9 +203,6 @@ main {
   padding-bottom:28px;
   border-bottom:1px solid #202532
 }
-.page-header p {
-  margin-top:6px
-}
 .header-actions {
   display:flex;
   gap:14px;
@@ -837,9 +834,6 @@ dialog::backdrop {
   }
   .page-header {
     gap:12px
-  }
-  .page-header p {
-    font-size:12px
   }
   .service-list {
     grid-template-columns:repeat(2,minmax(0,1fr))
