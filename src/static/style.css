@@ -133,21 +133,14 @@ small {
 .skip-link:focus {
   top:12px
 }
-.sidebar {
-  position:fixed;
-  inset:0 auto 0 0;
-  width:240px;
-  border-right:1px solid var(--line);
-  background:linear-gradient(160deg,#141723,#111520 80%);
-  padding:28px 16px;
+.page-title {
   display:flex;
-  flex-direction:column
+  gap:16px;
+  align-items:center
 }
 .brand {
   display:flex;
-  gap:12px;
-  align-items:center;
-  padding:0 8px 32px
+  flex:none
 }
 .brand svg {
   width:38px;
@@ -155,87 +148,7 @@ small {
   color:#a995ff;
   stroke:none
 }
-.brand strong {
-  display:block;
-  font-size:20px;
-  letter-spacing:-.03em
-}
-.brand small {
-  display:block;
-  margin-top:5px
-}
-.nav-link {
-  display:flex;
-  align-items:center;
-  gap:14px;
-  padding:13px;
-  border-radius:8px
-}
-.nav-link.active {
-  background:#29234f;
-  color:#f0eaff
-}
-.sidebar-label {
-  font-size:12px;
-  font-weight:600;
-  letter-spacing:.1em;
-  color:var(--muted);
-  margin:32px 12px 12px
-}
-#service-nav {
-  overflow:auto;
-  min-height:32px
-}
-.service-nav-item {
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:11px 12px;
-  border-radius:7px;
-  overflow:hidden
-}
-.service-nav-item span:last-child {
-  overflow:hidden;
-  text-overflow:ellipsis
-}
-.service-nav-item.selected {
-  background:#232137;
-  color:#c3b8ff
-}
-.local-host {
-  display:flex;
-  gap:12px;
-  align-items:center;
-  margin-top:auto;
-  padding:24px 10px 18px
-}
-.local-host strong,.local-host small {
-  display:block
-}
-.local-host strong {
-  font-size:13px;
-  font-weight:500
-}
-.local-host small {
-  margin-top:5px;
-  font-size:12px
-}
-.host-icon {
-  padding:10px;
-  background:#202433;
-  border-radius:9px;
-  color:#bec5da
-}
-.sidebar-footer {
-  border-top:1px solid var(--line);
-  padding:18px 10px 0;
-  display:flex;
-  gap:8px;
-  font-size:12px;
-  color:var(--muted)
-}
 main {
-  margin-left:240px;
   padding:30px 26px 16px;
   min-height:100vh
 }
@@ -381,12 +294,6 @@ input::placeholder,textarea::placeholder {
   height:100%;
   object-fit:contain;
   border-radius:inherit
-}
-.service-nav-item img {
-  width:20px;
-  height:20px;
-  object-fit:contain;
-  flex:none
 }
 .service-card h2 {
   font-size:16px;
@@ -773,7 +680,7 @@ dialog::backdrop {
 .toast {
   position:fixed;
   bottom:24px;
-  left:calc(50% + 100px);
+  left:50%;
   transform:translateX(-50%);
   padding:13px 20px;
   background:#29223d;
@@ -783,11 +690,6 @@ dialog::backdrop {
   max-width:calc(100vw - 40px);
   z-index:30;
   font-size:12px
-}
-.empty-nav {
-  font-size:12px;
-  color:var(--muted);
-  padding:8px 12px
 }
 .config-block h3 {
   margin:0 0 12px
@@ -814,11 +716,7 @@ dialog::backdrop {
   
 }
 @media(max-width:1200px) {
-  .sidebar {
-    width:210px
-  }
   main {
-    margin-left:210px;
     padding:24px 20px
   }
   .header-actions {
@@ -856,26 +754,6 @@ dialog::backdrop {
   
 }
 @media(max-width:950px) {
-  .sidebar {
-    width:180px;
-    padding:24px 12px
-  }
-  .brand {
-    gap:8px;
-    padding-left:0
-  }
-  .brand strong {
-    font-size:18px
-  }
-  .brand svg {
-    width:30px
-  }
-  .brand small {
-    font-size:12px
-  }
-  main {
-    margin-left:180px
-  }
   .page-header {
     align-items:start;
     flex-direction:column
@@ -910,38 +788,10 @@ dialog::backdrop {
   .detail {
     scroll-margin-top:16px
   }
-  .toast {
-    left:calc(50% + 70px)
-  }
   
 }
 @media(max-width:600px) {
-  .sidebar {
-    position:static;
-    width:100%;
-    height:auto;
-    padding:16px 20px;
-    flex-direction:row;
-    align-items:center;
-    justify-content:space-between;
-    border-right:0;
-    border-bottom:1px solid var(--line)
-  }
-  .brand {
-    padding:0
-  }
-  .brand small,.sidebar-label,#service-nav,.local-host,.sidebar-footer {
-    display:none
-  }
-  .nav-link {
-    padding:9px 12px;
-    font-size:12px
-  }
-  .nav-link svg {
-    width:16px
-  }
   main {
-    margin:0;
     padding:24px 16px 16px
   }
   .page-header {
@@ -1015,7 +865,6 @@ dialog::backdrop {
     padding:18px 16px
   }
   .toast {
-    left:50%;
     width:max-content
   }
   .dialog-heading {

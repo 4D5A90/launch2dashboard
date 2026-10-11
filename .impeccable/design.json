@@ -345,32 +345,6 @@
           "oklch(83.57% 0.0217 263.87)",
           "oklch(95.00% 0.0217 263.87)"
         ]
-      },
-      "nav-active-bg": {
-        "displayName": "nav-active-bg",
-        "tonalRamp": [
-          "oklch(15.00% 0.0778 286.69)",
-          "oklch(26.43% 0.0778 286.69)",
-          "oklch(37.86% 0.0778 286.69)",
-          "oklch(49.29% 0.0778 286.69)",
-          "oklch(60.71% 0.0778 286.69)",
-          "oklch(72.14% 0.0778 286.69)",
-          "oklch(83.57% 0.0778 286.69)",
-          "oklch(95.00% 0.0778 286.69)"
-        ]
-      },
-      "nav-active-text": {
-        "displayName": "nav-active-text",
-        "tonalRamp": [
-          "oklch(15.00% 0.0287 298.89)",
-          "oklch(26.43% 0.0287 298.89)",
-          "oklch(37.86% 0.0287 298.89)",
-          "oklch(49.29% 0.0287 298.89)",
-          "oklch(60.71% 0.0287 298.89)",
-          "oklch(72.14% 0.0287 298.89)",
-          "oklch(83.57% 0.0287 298.89)",
-          "oklch(95.00% 0.0287 298.89)"
-        ]
       }
     },
     "typographyMeta": {
@@ -442,14 +416,6 @@
       "description": "Champ de configuration avec label visible.",
       "html": "<label class=\"ds-label\">Executable<input class=\"ds-input\" placeholder=\"/absolute/path/to/executable\"></label>",
       "css": ".ds-label { display:flex;flex-direction:column;gap:8px;color:var(--text,#f3f3fa);font:12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-input { padding:10px 12px;background:#10151f;border:1px solid #394052;border-radius:7px;color:var(--text,#f3f3fa);font:inherit;line-height:1.4;caret-color:var(--violet,#9c8aff); } .ds-input::placeholder { color:#929bae; } .ds-input:focus-visible { outline:2px solid var(--violet,#9c8aff); outline-offset:3px; }"
-    },
-    {
-      "name": "Active Navigation",
-      "kind": "nav",
-      "refersTo": "nav-active",
-      "description": "Destination active de la navigation.",
-      "html": "<a href=\"#services\" class=\"ds-nav\" aria-current=\"page\">Services</a>",
-      "css": ".ds-nav { display:flex;align-items:center;gap:14px;padding:13px;border-radius:8px;background:#29234f;color:#f0eaff;text-decoration:none;font:14px -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-nav:hover { text-decoration:underline;text-underline-offset:4px; } .ds-nav:focus-visible { outline:2px solid var(--violet,#9c8aff); outline-offset:3px; }"
     },
     {
       "name": "Running Badge",

@@ -12,32 +12,18 @@
 
 <body data-selected-id="{{ selected_id }}" {% if dev_reload %}data-dev-reload{% endif %}>
     <a class="skip-link" href="#main">Skip to services</a>
-    <aside class="sidebar">
-        <a class="brand" href="/" aria-label="L2D home">
-            <svg viewBox="0 0 40 40" aria-hidden="true">
-                <path d="M4 8 19 16 20 34 25 20 37 8 24 12 20 19 16 12Z" fill="currentColor" />
-            </svg>
-            <span>
-                <strong>L2D</strong>
-                <small>Services control</small>
-            </span>
-        </a>
-        <a class="nav-link active" href="/">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="6" rx="2" />
-                <rect x="3" y="14" width="18" height="6" rx="2" />
-                <path d="M7 7h.01M7 17h.01M12 7h5M12 17h5" />
-            </svg>
-            Services
-        </a>
-        <div class="sidebar-label">YOUR SERVICES</div>
-        <nav id="service-nav" aria-label="Your services"></nav>
-    </aside>
     <main id="main">
         <header class="page-header">
-            <div>
-                <h1>Services</h1>
-                <p>Manage your services. Keep everything running.</p>
+            <div class="page-title">
+                <a class="brand" href="/" aria-label="L2D home">
+                    <svg viewBox="0 0 40 40" aria-hidden="true">
+                        <path d="M4 8 19 16 20 34 25 20 37 8 24 12 20 19 16 12Z" fill="currentColor" />
+                    </svg>
+                </a>
+                <div>
+                    <h1>Services</h1>
+                    <p>Manage your services. Keep everything running.</p>
+                </div>
             </div>
             <div class="header-actions">
                 <label class="search">

@@ -28,8 +28,6 @@ colors:
   danger-text: "#ffb6bc"
   danger-hover: "#65303b"
   field-bg: "#10151f"
-  nav-active-bg: "#29234f"
-  nav-active-text: "#f0eaff"
 typography:
   body:
     fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"
@@ -99,11 +97,6 @@ components:
     textColor: "{colors.text}"
     rounded: "{rounded.compact}"
     padding: "10px 12px"
-  nav-active:
-    backgroundColor: "{colors.nav-active-bg}"
-    textColor: "{colors.nav-active-text}"
-    rounded: "{rounded.control}"
-    padding: "13px"
   badge-running:
     backgroundColor: "{colors.running-bg}"
     textColor: "{colors.running-text}"
@@ -153,13 +146,13 @@ La hiérarchie observée est portée par `page-title`, `detail-title`, `service-
 
 ## Layout
 
-Sur grand écran, navigation fixe de 240px et contenu décalé de la même largeur. Le contenu possède un padding de 30px 26px 16px. La liste et le détail forment deux colonnes `minmax(320px,1.25fr) minmax(340px,1fr)` séparées de 16px. Les cartes ont 20px de padding et 12px entre elles.
+Pas de navigation latérale : le dashboard n’a qu’une destination, et les cartes donnent déjà accès à chaque service. Le logo L2D précède le titre de page. Le contenu occupe toute la largeur et possède un padding de 30px 26px 16px. La liste et le détail forment deux colonnes `minmax(320px,1.25fr) minmax(340px,1fr)` séparées de 16px. Les cartes ont 20px de padding et 12px entre elles.
 
-À 1550px et au-delà, les marges, cartes et intercolonnes respirent davantage. À 1200px et moins, la navigation fait 210px, les cartes 18px de padding et perdent leur icône. À 950px et moins, la navigation fait 180px, les panneaux s’empilent et les icônes reviennent. À 600px et moins, la navigation devient une barre horizontale, le contenu n’a plus de décalage latéral et les cartes ont 16px de padding. Les filtres et actions peuvent revenir à la ligne.
+À 1550px et au-delà, les marges, cartes et intercolonnes respirent davantage. À 1200px et moins, les cartes ont 18px de padding et perdent leur icône. À 950px et moins, les panneaux s’empilent et les icônes reviennent. À 600px et moins, les cartes ont 16px de padding. Les filtres et actions peuvent revenir à la ligne.
 
 ## Elevation & Depth
 
-Le dashboard utilise des dégradés sombres discrets dans la navigation et les cartes. Les panneaux, dialogues et notifications n’ont pas d’ombre portée. La sélection utilise `inset 0 0 0 1px var(--violet)` en complément de sa bordure. Le dialogue assombrit l’arrière-plan avec `#070911bb`.
+Le dashboard utilise des dégradés sombres discrets dans les cartes. Les panneaux, dialogues et notifications n’ont pas d’ombre portée. La sélection utilise `inset 0 0 0 1px var(--violet)` en complément de sa bordure. Le dialogue assombrit l’arrière-plan avec `#070911bb`.
 
 **The Bordered Surface Rule.** Séparer les panneaux par leur fond et leur contour ; réserver le double contour violet au service sélectionné.
 
@@ -182,7 +175,7 @@ Les cartes de services contiennent le nom, le badge, le chemin tronqué, les val
 Les champs ont un fond sombre, une bordure et un caret violet. La recherche place une icône SVG dans son conteneur. Les formulaires gardent des labels visibles et des aides sous les champs. Les erreurs sont affichées dans un bloc rouge bordé. Les zones de texte techniques utilisent la pile monospace et sont redimensionnables verticalement.
 
 ### Navigation
-La destination active a un fond violet sombre ; le service sélectionné a une teinte plus discrète. Les onglets du détail utilisent un texte violet et un trait inférieur de 2px pour la sélection. Les liens gardent un soulignement au survol et un focus visible au clavier. Sur mobile, la liste de navigation latérale disparaît ; les cartes conservent l’accès aux services.
+Les onglets du détail utilisent un texte violet et un trait inférieur de 2px pour la sélection. Les liens gardent un soulignement au survol et un focus visible au clavier. Les cartes sont le seul point d’accès aux services : ne pas les dupliquer dans une liste de navigation.
 
 ### Logs
 Les canaux sont nommés séparément. Chaque sortie utilise un bloc sombre bordé, défilant, avec retour à la ligne des longues valeurs. Sa hauteur va de 64px à 230px. La mise à jour conserve la position de lecture lorsque l’utilisateur ne suit plus le bas du flux.

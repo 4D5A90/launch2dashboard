@@ -66,7 +66,6 @@
     for (const key of ['all', 'running', 'stopped', 'error']) $('#count-' + key).textContent = key === 'all' ? services.length : services.filter((service) => state(service) === key).length;
     const visible = services.filter((service) => (filter === 'all' || state(service) === filter) && `${service.config.id} ${service.config.executable}`.toLowerCase().includes(query));
     list.innerHTML = visible.map((service) => `<article class="service-card ${selected === service.config.id ? 'selected' : ''}">${serviceIcon(service)}<div><div class="card-top"><h2><a data-select="${escape(service.config.id)}" href="/services/${encodeURIComponent(service.config.id)}">${escape(service.config.id)}</a></h2>${badge(service)}</div><p class="command" title="${escape(service.config.executable)}">${escape(service.config.executable)}</p><div class="card-bottom"><div class="metrics-inline"><span>PID ${escape(service.status.pid ?? '—')}</span><span>Uptime ${duration(service.status.uptime_seconds)}</span></div><div class="card-actions">${actionButtons(service)}</div></div></div></article>`).join('') || `<div class="empty-state"><div class="service-icon">${serverIcon}</div><h2>${services.length ? 'No matching services' : 'Make room for your next service'}</h2><p>${services.length ? 'Try another search or choose a different status.' : 'Add an executable and let launchd handle the rest. Your local services will appear here.'}</p><button ${services.length ? 'data-action="clear-filters"' : 'class="primary" data-action="create"'}>${services.length ? 'Clear filters' : 'Add your first service'}</button></div>`;
-    $('#service-nav').innerHTML = services.map((service) => `<a class="service-nav-item ${selected === service.config.id ? 'selected' : ''}" data-select="${escape(service.config.id)}" href="/services/${encodeURIComponent(service.config.id)}"${selected === service.config.id ? ' aria-current="page"' : ''}><i class="dot ${state(service)}"></i>${iconImage(service)}<span>${escape(service.config.id)}</span></a>`).join('') || '<p class="empty-nav">No services yet</p>';
     list.setAttribute('aria-busy', 'false');
   }
   function facts(entries) {
@@ -93,7 +92,7 @@
   function render() {
     // Polling must not steal focus from the control currently in use.
     const focused = document.activeElement;
-    const focusRoot = detail.contains(focused) ? detail : list.contains(focused) ? list : $('#service-nav').contains(focused) ? $('#service-nav') : document;
+    const focusRoot = detail.contains(focused) ? detail : list.contains(focused) ? list : document;
     const focusedId = focused?.id;
     const marker = focused?.dataset.action ? ['action', focused.dataset.action, focused.dataset.id] : focused?.dataset.tab ? ['tab', focused.dataset.tab] : focused?.dataset.select ? ['select', focused.dataset.select] : null;
     renderList(); renderDetail();
