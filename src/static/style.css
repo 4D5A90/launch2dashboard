@@ -44,7 +44,7 @@ button {
 button:hover {
   background:#2b3042
 }
-button:disabled {
+button:disabled,button[aria-disabled=true] {
   opacity:.5;
   cursor:wait
 }

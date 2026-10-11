@@ -38,7 +38,7 @@
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/>',
     delete: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   };
-  const actionButton = (action, service) => `<button class="act act-${action}" data-action="${action}" data-id="${escape(service.config.id)}"${pending.has(service.config.id) ? ' disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${actionIcons[action]}</svg>${action[0].toUpperCase() + action.slice(1)}</button>`;
+  const actionButton = (action, service) => `<button class="act act-${action}" data-action="${action}" data-id="${escape(service.config.id)}"${pending.has(service.config.id) ? ' aria-disabled="true"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${actionIcons[action]}</svg>${action[0].toUpperCase() + action.slice(1)}</button>`;
   const actionButtons = (service) => actionButton(['running', 'starting'].includes(state(service)) ? 'stop' : 'start', service) + actionButton('restart', service);
   // Arguments are typed on one line and split like a shell would, quotes and backslashes included,
   // but never expanded: launchd receives the exact list shown in the preview.
@@ -103,35 +103,61 @@
     const text = await response.text();
     return text ? JSON.parse(text) : null;
   }
+  // Polling re-renders every 3s: only touch the DOM where the markup changed, so text selection,
+  // focus and screen-reader position survive unchanged regions.
+  const rendered = new WeakMap();
+  function patch(node, html) {
+    if (rendered.get(node) === html) return;
+    node.innerHTML = html;
+    rendered.set(node, html);
+  }
+  const cards = new Map();
+  const cardBody = (service) => `${serviceIcon(service)}<div class="card-body"><div class="card-top"><h2><a data-select="${escape(service.config.id)}" href="/services/${encodeURIComponent(service.config.id)}">${escape(service.config.id)}</a></h2>${badge(service)}</div><p class="command" title="${escape(service.config.executable)}">${escape(service.config.executable)}</p><div class="card-bottom"><div class="metrics-inline"><span>PID ${escape(service.status.pid ?? '—')}</span><span>Uptime ${duration(service.status.uptime_seconds)}</span></div><div class="card-actions">${actionButtons(service)}</div></div></div>`;
   function renderList() {
     const query = $('#search').value.toLowerCase();
     for (const key of ['all', 'running', 'stopped', 'error']) $('#count-' + key).textContent = key === 'all' ? services.length : services.filter((service) => state(service) === key).length;
     const visible = services.filter((service) => (filter === 'all' || state(service) === filter) && `${service.config.id} ${service.config.executable}`.toLowerCase().includes(query));
-    list.innerHTML = visible.map((service) => `<article class="service-card ${selected === service.config.id ? 'selected' : ''}">${serviceIcon(service)}<div class="card-body"><div class="card-top"><h2><a data-select="${escape(service.config.id)}" href="/services/${encodeURIComponent(service.config.id)}">${escape(service.config.id)}</a></h2>${badge(service)}</div><p class="command" title="${escape(service.config.executable)}">${escape(service.config.executable)}</p><div class="card-bottom"><div class="metrics-inline"><span>PID ${escape(service.status.pid ?? '—')}</span><span>Uptime ${duration(service.status.uptime_seconds)}</span></div><div class="card-actions">${actionButtons(service)}</div></div></div></article>`).join('') || `<div class="empty-state"><div class="service-icon">${serverIcon}</div><h2>${services.length ? 'No matching services' : 'Make room for your next service'}</h2><p>${services.length ? 'Try another search or choose a different status.' : 'Add an executable and let launchd handle the rest. Your local services will appear here.'}</p><button ${services.length ? 'data-action="clear-filters"' : 'class="primary" data-action="create"'}>${services.length ? 'Clear filters' : 'Add your first service'}</button></div>`;
     list.setAttribute('aria-busy', 'false');
+    if (!visible.length) {
+      cards.clear();
+      patch(list, `<div class="empty-state"><div class="service-icon">${serverIcon}</div><h2>${services.length ? 'No matching services' : 'Make room for your next service'}</h2><p>${services.length ? 'Try another search or choose a different status.' : 'Add an executable and let launchd handle the rest. Your local services will appear here.'}</p><button ${services.length ? 'data-action="clear-filters"' : 'class="primary" data-action="create"'}>${services.length ? 'Clear filters' : 'Add your first service'}</button></div>`);
+      return;
+    }
+    rendered.delete(list);
+    const nodes = visible.map((service) => {
+      const id = service.config.id;
+      if (!cards.has(id)) cards.set(id, document.createElement('article'));
+      const card = cards.get(id);
+      card.className = `service-card${selected === id ? ' selected' : ''}`;
+      patch(card, cardBody(service));
+      return card;
+    });
+    for (const [id, card] of cards) if (!nodes.includes(card)) cards.delete(id);
+    nodes.forEach((card, index) => { if (list.children[index] !== card) list.insertBefore(card, list.children[index] ?? null); });
+    while (list.children.length > nodes.length) list.lastElementChild.remove();
   }
   function facts(entries) {
     return `<dl class="facts">${entries.map(([label, value, mono]) => `<div class="fact"><dt>${escape(label)}</dt><dd${mono ? ' class="mono"' : ''}>${escape(value ?? '—')}</dd></div>`).join('')}</dl>`;
   }
+  let detailShell = null;
   function renderDetail() {
     const service = services.find((entry) => entry.config.id === selected);
     // Without a selection the list takes the whole width; with one it compacts so the detail gets the room.
     list.parentElement.classList.toggle('has-selection', Boolean(service));
     detail.hidden = !service;
-    if (!service) { detail.innerHTML = ''; disconnect(); return; }
-    const logPositions = ['stdout', 'stderr'].map((channel) => {
-      const node = $('#' + channel);
-      return node ? { channel, top: node.scrollTop, follow: node.scrollHeight - node.scrollTop - node.clientHeight < 30 } : null;
-    });
+    if (!service) { detail.innerHTML = ''; detailShell = null; disconnect(); return; }
     const config = service.config;
+    // The shell, and with it the log <pre> nodes, is rebuilt only when the service or the tab changes.
+    if (detailShell !== `${config.id}\n${activeTab}`) {
+      detailShell = `${config.id}\n${activeTab}`;
+      detail.innerHTML = `<div class="detail-header"></div><div class="tabs" role="tablist" aria-label="Service details">${['overview', 'logs', 'config'].map((tab) => `<button class="tab" id="tab-${tab}" role="tab" aria-controls="detail-panel" aria-selected="${activeTab === tab}" tabindex="${activeTab === tab ? 0 : -1}" data-tab="${tab}">${tab[0].toUpperCase() + tab.slice(1)}</button>`).join('')}</div><div class="detail-content" id="detail-panel" role="tabpanel" aria-labelledby="tab-${activeTab}" tabindex="0"><div class="detail-info"></div>${activeTab !== 'config' ? '<section aria-label="Service logs"><div class="logs-heading"><h3>Live logs</h3><span class="stream-state" id="stream-state"></span></div><p class="log-label">STDOUT</p><pre class="terminal" id="stdout" tabindex="0" aria-label="Standard output"></pre><p class="log-label">STDERR</p><pre class="terminal" id="stderr" tabindex="0" aria-label="Standard error"></pre></section>' : ''}</div>`;
+      updateLogs();
+      for (const node of detail.querySelectorAll('.terminal')) node.scrollTop = node.scrollHeight;
+    }
     const overview = facts([['Command', config.executable, true], ['Directory', config.working_directory || 'Default'], ['Host', 'This Mac · localhost'], ['Autostart', config.autostart ? 'Yes' : 'No'], ['Restart policy', config.restart_on_failure ? 'On failure' : 'Never']]);
     const configuration = `<section class="config-block"><h3>LaunchAgent configuration</h3>${facts([['Label', `launch2dashboard.${config.id}`, true], ['Executable', config.executable, true], ['Arguments', config.arguments.join('\n') || 'None', true], ['Directory', config.working_directory || 'Default'], ['Environment', Object.entries(config.environment).map(([key, value]) => `${key}=${value}`).join('\n') || 'None', true], ['Autostart', config.autostart ? 'Yes' : 'No'], ['Restart policy', config.restart_on_failure ? 'On failure' : 'Never']])}<p><small>Environment values are visible only in this local dashboard.</small></p></section>`;
-    detail.innerHTML = `<div class="detail-header"><div class="detail-heading">${serviceIcon(service)}<div><h2>${escape(config.id)}</h2>${badge(service)}</div></div><button class="icon-button" data-action="close-detail" aria-label="Close service details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="tabs" role="tablist" aria-label="Service details">${['overview', 'logs', 'config'].map((tab) => `<button class="tab" id="tab-${tab}" role="tab" aria-controls="detail-panel" aria-selected="${activeTab === tab}" tabindex="${activeTab === tab ? 0 : -1}" data-tab="${tab}">${tab[0].toUpperCase() + tab.slice(1)}</button>`).join('')}</div><div class="detail-content" id="detail-panel" role="tabpanel" aria-labelledby="tab-${activeTab}" tabindex="0">${service.status.error ? `<p class="error-banner">${escape(service.status.error)}</p>` : ''}${activeTab === 'config' ? configuration : activeTab === 'overview' ? overview : ''}<div class="detail-actions">${actionButtons(service)}${actionButton('edit', service)}${actionButton('delete', service)}</div>${activeTab === 'overview' ? `<div class="metrics"><div class="metric"><small>Process ID</small><strong>${escape(service.status.pid ?? '—')}</strong></div><div class="metric"><small>Uptime</small><strong>${duration(service.status.uptime_seconds)}</strong></div><div class="metric"><small>Restarts</small><strong>${escape(service.status.restart_count ?? '—')}</strong></div></div>` : ''}${activeTab !== 'config' ? '<section aria-label="Service logs"><div class="logs-heading"><h3>Live logs</h3><span class="stream-state" id="stream-state"></span></div><p class="log-label">STDOUT</p><pre class="terminal" id="stdout" tabindex="0" aria-label="Standard output"></pre><p class="log-label">STDERR</p><pre class="terminal" id="stderr" tabindex="0" aria-label="Standard error"></pre></section>' : ''}</div>`;
-    updateLogs();
-    for (const position of logPositions) {
-      const node = position && $('#' + position.channel);
-      if (node) node.scrollTop = position.follow ? node.scrollHeight : position.top;
-    }
+    patch(detail.querySelector('.detail-header'), `<div class="detail-heading">${serviceIcon(service)}<div><h2>${escape(config.id)}</h2>${badge(service)}</div></div><button class="icon-button" data-action="close-detail" aria-label="Close service details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`);
+    patch(detail.querySelector('.detail-info'), `${service.status.error ? `<p class="error-banner">${escape(service.status.error)}</p>` : ''}${activeTab === 'config' ? configuration : activeTab === 'overview' ? overview : ''}<div class="detail-actions">${actionButtons(service)}${actionButton('edit', service)}${actionButton('delete', service)}</div>${activeTab === 'overview' ? `<div class="metrics"><div class="metric"><small>Process ID</small><strong>${escape(service.status.pid ?? '—')}</strong></div><div class="metric"><small>Uptime</small><strong>${duration(service.status.uptime_seconds)}</strong></div><div class="metric"><small>Restarts</small><strong>${escape(service.status.restart_count ?? '—')}</strong></div></div>` : ''}`);
     connect(config.id);
   }
   function render() {
@@ -143,8 +169,11 @@
     renderList(); renderDetail();
     if (marker) {
       const candidates = focusRoot.querySelectorAll(`[data-${marker[0]}]`);
-      [...candidates].find((node) => node.dataset[marker[0]] === marker[1] && (!marker[2] || node.dataset.id === marker[2]))?.focus({ preventScroll: true });
-    } else if (focusedId) {
+      // Start and Stop swap in place, so a focused one hands focus to its counterpart.
+      const names = { start: ['start', 'stop'], stop: ['stop', 'start'] }[marker[1]] ?? [marker[1]];
+      const match = names.map((name) => [...candidates].find((node) => node.dataset[marker[0]] === name && (!marker[2] || node.dataset.id === marker[2]))).find(Boolean);
+      if (match && match !== document.activeElement) match.focus({ preventScroll: true });
+    } else if (focusedId && focusedId !== document.activeElement?.id) {
       document.getElementById(focusedId)?.focus({ preventScroll: true });
     }
   }
@@ -179,8 +208,8 @@
       const node = $('#' + channel);
       if (!node) continue;
       const follow = node.scrollHeight - node.scrollTop - node.clientHeight < 30;
-      const value = String(latestLogs[channel] || '').slice(-65536);
-      if (node.textContent !== value) { node.textContent = value || 'No output yet.'; if (follow) node.scrollTop = node.scrollHeight; }
+      const value = String(latestLogs[channel] || '').slice(-65536) || 'No output yet.';
+      if (node.textContent !== value) { node.textContent = value; if (follow) node.scrollTop = node.scrollHeight; }
     }
     if ($('#stream-state')) $('#stream-state').textContent = streamState;
   }
@@ -251,7 +280,7 @@
     const link = event.target.closest('[data-select]');
     if (link && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); select(link.dataset.select); return; }
     const button = event.target.closest('button');
-    if (!button || button.disabled) return;
+    if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
     if (button.dataset.filter) {
       filter = button.dataset.filter;
       document.querySelectorAll('[data-filter]').forEach((node) => { node.classList.toggle('selected', node.dataset.filter === filter); node.setAttribute('aria-pressed', String(node.dataset.filter === filter)); });
@@ -330,7 +359,7 @@
     event.preventDefault();
     if ($('#confirm-delete').disabled || !deleting) return;
     $('#confirm-delete').disabled = true;
-    try { await request(endpoint(deleting), { method: 'DELETE' }); deleteDialog.close(); if (selected === deleting) select(''); toast('Service deleted.'); deleting = null; await refresh(); }
+    try { await request(endpoint(deleting), { method: 'DELETE' }); deleteDialog.close(); if (selected === deleting) select(''); toast('Service deleted.'); deleting = null; await refresh(); (list.querySelector('[data-select]') ?? $('#search')).focus(); }
     catch (error) { showError('#delete-error', error.message); }
     finally { $('#confirm-delete').disabled = false; }
   });
