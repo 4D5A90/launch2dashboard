@@ -3,7 +3,6 @@
   const $ = (selector) => document.querySelector(selector);
   const list = $('#service-list');
   const detail = $('#detail');
-  const placeholder = detail.innerHTML;
   const form = $('#service-form');
   const dialog = $('#service-dialog');
   const deleteDialog = $('#delete-dialog');
@@ -18,6 +17,7 @@
   let latestLogs = { stdout: '', stderr: '' };
   let streamState = 'Connecting…';
   let refreshPending = false;
+  let refreshStartedAt = 0;
   let refreshAgain = false;
   let toastTimer;
   let iconChange = null;
@@ -73,9 +73,10 @@
   }
   function renderDetail() {
     const service = services.find((entry) => entry.config.id === selected);
-    // A selection compacts the list so the detail and its logs get the room.
+    // Without a selection the list takes the whole width; with one it compacts so the detail gets the room.
     list.parentElement.classList.toggle('has-selection', Boolean(service));
-    if (!service) { detail.innerHTML = placeholder; disconnect(); return; }
+    detail.hidden = !service;
+    if (!service) { detail.innerHTML = ''; disconnect(); return; }
     const logPositions = ['stdout', 'stderr'].map((channel) => {
       const node = $('#' + channel);
       return node ? { channel, top: node.scrollTop, follow: node.scrollHeight - node.scrollTop - node.clientHeight < 30 } : null;
@@ -105,16 +106,26 @@
       document.getElementById(focusedId)?.focus({ preventScroll: true });
     }
   }
+  // The indicator only reflects real responses: each successful poll beats it, a failed or hung one turns it red.
+  function setLive(live) {
+    const status = $('#refresh-status');
+    const dot = status.firstElementChild;
+    dot.className = `dot ${live ? 'running' : 'error'}`;
+    status.lastElementChild.textContent = live ? 'Live' : 'Offline';
+    if (!live) return;
+    status.title = `Last update ${new Date().toLocaleTimeString()}`;
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) dot.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 #35d68a99' }, { transform: 'scale(1.35)', boxShadow: '0 0 0 5px #35d68a00' }, { transform: 'scale(1)', boxShadow: '0 0 0 0 #35d68a00' }], { duration: 700, easing: 'ease-out' });
+  }
   async function refresh() {
     if (refreshPending) { refreshAgain = true; return; }
-    refreshPending = true;
+    refreshPending = true; refreshStartedAt = Date.now();
     try {
       services = await request('/api/services');
       if (!Array.isArray(services)) throw new Error('Unexpected service response. Reload the dashboard.');
       showError('#page-error', '');
-      $('#refresh-status').textContent = 'Live · refreshes every 3s';
+      setLive(true);
       render();
-    } catch (error) { showError('#page-error', error.message); $('#refresh-status').textContent = 'Connection interrupted'; list.setAttribute('aria-busy', 'false'); }
+    } catch (error) { showError('#page-error', error.message); setLive(false); list.setAttribute('aria-busy', 'false'); }
     finally { refreshPending = false; if (refreshAgain) { refreshAgain = false; void refresh(); } }
   }
   function disconnect() {
@@ -209,7 +220,7 @@
     else if (action === 'create') openForm();
     else if (action === 'edit') openForm(id);
     else if (action === 'close-form' && !$('#save-service').disabled) dialog.close();
-    else if (action === 'close-detail') select('');
+    else if (action === 'close-detail') { const closed = selected; select(''); list.querySelector(`[data-select="${CSS.escape(closed)}"]`)?.focus(); }
     else if (action === 'remove-icon') { iconChange = 'remove'; form.elements.icon.value = ''; $('#icon-preview').innerHTML = serverIcon; button.hidden = true; }
     else if (action === 'clear-filters') { $('#search').value = ''; $('[data-filter="all"]').click(); }
     else if (action === 'delete') { deleting = id; $('#delete-description').textContent = `This will stop ${id} and remove its LaunchAgent configuration. Its log files will be kept.`; showError('#delete-error', ''); deleteDialog.showModal(); $('[data-action="cancel-delete"]').focus(); }
@@ -290,6 +301,9 @@
     reload.onopen = () => { if (lost) location.reload(); };
   }
   void refresh();
-  setInterval(() => { if (!document.hidden) void refresh(); }, 3000);
+  setInterval(() => {
+    if (refreshPending && Date.now() - refreshStartedAt > 10000) setLive(false);
+    if (!document.hidden) void refresh();
+  }, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
 })();

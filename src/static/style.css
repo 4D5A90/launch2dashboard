@@ -250,19 +250,22 @@ input::placeholder,textarea::placeholder {
   background:var(--amber)
 }
 .refresh-status {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
   font-size:12px;
   color:var(--muted);
   white-space:nowrap
 }
 .workspace {
   display:grid;
-  grid-template-columns:minmax(320px,1.25fr) minmax(340px,1fr);
+  grid-template-columns:minmax(0,1fr);
   gap:16px;
   align-items:start
 }
 .service-list {
-  display:flex;
-  flex-direction:column;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
   gap:12px;
   min-width:0
 }
@@ -367,6 +370,7 @@ input::placeholder,textarea::placeholder {
   grid-template-columns:minmax(300px,380px) minmax(0,1fr)
 }
 .has-selection .service-list {
+  grid-template-columns:minmax(0,1fr);
   gap:8px
 }
 .has-selection .service-card {
@@ -566,26 +570,8 @@ input::placeholder,textarea::placeholder {
   overflow-wrap:anywhere;
   tab-size:2
 }
-.detail-placeholder {
-  text-align:center;
-  padding:100px 30px;
-  color:#8779c4
-}
-.detail-placeholder svg {
-  width:36px;
-  height:36px;
-  margin-bottom:22px
-}
-.detail-placeholder h2 {
-  color:#ddd8ef;
-  font-size:16px
-}
-.detail-placeholder p {
-  font-size:12px;
-  max-width:260px;
-  margin:10px auto 0
-}
 .empty-state {
+  grid-column:1/-1;
   text-align:center;
   padding:80px 25px;
   background:#141923;
@@ -780,22 +766,11 @@ dialog::backdrop {
   .page-header p {
     font-size:12px
   }
-  .workspace {
-    grid-template-columns:minmax(270px,1fr) minmax(300px,1fr)
+  .service-list {
+    grid-template-columns:repeat(2,minmax(0,1fr))
   }
   .service-card {
-    grid-template-columns:minmax(0,1fr);
     padding:18px
-  }
-  .service-card>.service-icon {
-    display:none
-  }
-  .card-bottom {
-    flex-wrap:wrap
-  }
-  .card-top {
-    align-items:start;
-    flex-wrap:wrap
   }
   .fact {
     grid-template-columns:90px minmax(0,1fr)
@@ -813,26 +788,8 @@ dialog::backdrop {
   .search {
     flex:1
   }
-  .workspace,.workspace.has-selection {
-    grid-template-columns:1fr
-  }
-  .detail-placeholder {
-    padding:50px 25px
-  }
-  .service-card {
-    grid-template-columns:56px minmax(0,1fr)
-  }
-  .service-card>.service-icon {
-    display:grid
-  }
-  .card-top {
-    align-items:center
-  }
-  .card-bottom {
-    flex-wrap:nowrap
-  }
-  .refresh-status {
-    display:none
+  .workspace.has-selection,.service-list {
+    grid-template-columns:minmax(0,1fr)
   }
   .detail {
     scroll-margin-top:16px
