@@ -122,6 +122,49 @@ small {
 .danger:hover {
   background:#65303b
 }
+/* Action colours reuse the status badge tints: start→running, stop→error, restart→starting. */
+.act svg .solid {
+  fill:currentColor
+}
+.act-start {
+  background:#15362e;
+  border-color:#245c48;
+  color:#70e9ae
+}
+.act-start:hover {
+  background:#1b4538
+}
+.act-stop {
+  background:#3c222d;
+  border-color:#6a3441;
+  color:#ff9ca5
+}
+.act-stop:hover {
+  background:#4b2a37
+}
+.act-restart {
+  background:#3a3020;
+  border-color:#62512e;
+  color:#f0cf8f
+}
+.act-restart:hover {
+  background:#473b27
+}
+.act-edit {
+  background:#2a2546;
+  border-color:#463c78;
+  color:#c3b8ff
+}
+.act-edit:hover {
+  background:#342d59
+}
+.act-delete {
+  background:transparent;
+  color:#ff9ca5
+}
+.act-delete:hover {
+  background:#3c222d
+}
 .skip-link {
   position:fixed;
   top:-100px;
@@ -359,6 +402,7 @@ input::placeholder,textarea::placeholder {
   gap:6px
 }
 .card-actions button {
+  gap:6px;
   font-size:12px;
   padding:7px 10px
 }
@@ -520,6 +564,10 @@ input::placeholder,textarea::placeholder {
 .detail-actions button {
   font-size:12px;
   padding:9px 12px
+}
+.detail-actions svg {
+  width:14px;
+  height:14px
 }
 .metrics {
   display:grid;
