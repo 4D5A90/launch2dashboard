@@ -2,9 +2,14 @@
 
 Local macOS dashboard for the `launchd` services in the `launch2dashboard.*` namespace. A single Rust binary, with the UI embedded.
 
-Requires macOS and [Rust stable](https://rust-lang.org/tools/install/). Run as your normal user, not with `sudo`.
+Requires macOS, [Rust stable](https://rust-lang.org/tools/install/) and [just](https://just.systems), the task runner. Run as your normal user, not with `sudo`.
 
-Tasks go through [just](https://just.systems) (`brew install just`); `just` alone lists them. Each recipe is a thin wrapper, so the commands below also work without it.
+```sh
+cargo install just
+just   # lists the tasks
+```
+
+Each task is a thin wrapper around `cargo` or a script in [scripts/](scripts/), which you can also run directly.
 
 ## Quick start
 
@@ -41,7 +46,7 @@ For the binary alone, without the agent: `cargo install --path . --locked`.
 
 ## Develop
 
-With [bacon](https://dystroy.org/bacon/) (`brew install bacon`), the server rebuilds and restarts on every change:
+With [bacon](https://dystroy.org/bacon/) (`cargo install bacon`), the server rebuilds and restarts on every change:
 
 ```sh
 just dev   # bacon run
