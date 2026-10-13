@@ -22,10 +22,10 @@ body {
   background:var(--bg);
   color:var(--text)
 }
-button,input,textarea {
+button,input,select,textarea {
   font:inherit
 }
-button,a,input,textarea {
+button,a,input,select,textarea {
    -webkit-tap-highlight-color:transparent
 }
 button {
@@ -56,7 +56,7 @@ a:hover {
   text-decoration:underline;
   text-underline-offset:4px
 }
-button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible {
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {
   outline:2px solid var(--violet);
   outline-offset:3px
 }
@@ -64,7 +64,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
   background:#5844ae;
   color:white
 }
-input,textarea {
+input,select,textarea {
   caret-color:var(--violet)
 }
 * {
@@ -697,7 +697,7 @@ dialog::backdrop {
   font-size:12px;
   margin-top:8px
 }
-.form-fields input:not([type=checkbox]),.form-fields textarea {
+.form-fields input:not([type=checkbox]),.form-fields select,.form-fields textarea {
   width:100%;
   padding:10px 12px;
   background:#10151f;

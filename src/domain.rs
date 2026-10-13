@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt, path::Path};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+// A client still sending a removed field (e.g. `restart_on_failure`) gets an error, not a silent default.
+#[serde(deny_unknown_fields)]
 pub struct ServiceConfig {
     pub id: String,
     pub executable: String,
@@ -12,7 +14,16 @@ pub struct ServiceConfig {
     #[serde(default)]
     pub autostart: bool,
     #[serde(default)]
-    pub restart_on_failure: bool,
+    pub restart: RestartPolicy,
+}
+/// When launchd relaunches the process after it exits.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RestartPolicy {
+    #[default]
+    Never,
+    OnFailure,
+    Always,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Service {
@@ -30,7 +41,7 @@ impl Service {
                 working_directory: None,
                 environment: BTreeMap::new(),
                 autostart: false,
-                restart_on_failure: false,
+                restart: RestartPolicy::Never,
             },
             status: ServiceStatus {
                 state: ServiceState::Error,
@@ -219,10 +230,10 @@ impl ServiceConfig {
                 "Invalid argument or environment variable",
             ));
         }
-        if self.restart_on_failure && !self.autostart {
+        if self.restart != RestartPolicy::Never && !self.autostart {
             return Err(AppError::new(
                 ErrorKind::Validation,
-                "Restart on failure requires automatic start (launchd SuccessfulExit policy)",
+                "Restarting requires automatic start (launchd KeepAlive starts the job at load)",
             ));
         }
         Ok(())
@@ -251,9 +262,34 @@ mod tests {
             working_directory: None,
             environment: BTreeMap::new(),
             autostart: false,
-            restart_on_failure: true,
+            restart: RestartPolicy::Never,
         };
-        assert_eq!(c.validate().unwrap_err().kind, ErrorKind::Validation);
+        for restart in [RestartPolicy::OnFailure, RestartPolicy::Always] {
+            let c = ServiceConfig {
+                restart,
+                ..c.clone()
+            };
+            assert_eq!(c.validate().unwrap_err().kind, ErrorKind::Validation);
+        }
+    }
+    #[test]
+    fn restart_policy_json_is_snake_case_and_legacy_field_is_rejected() {
+        let base =
+            serde_json::json!({"id": "demo", "executable": "/bin/echo", "working_directory": null});
+        for (value, policy) in [
+            ("never", RestartPolicy::Never),
+            ("on_failure", RestartPolicy::OnFailure),
+            ("always", RestartPolicy::Always),
+        ] {
+            let mut json = base.clone();
+            json["restart"] = value.into();
+            let c: ServiceConfig = serde_json::from_value(json).unwrap();
+            assert_eq!(c.restart, policy);
+            assert_eq!(serde_json::to_value(&c).unwrap()["restart"], value);
+        }
+        let mut legacy = base;
+        legacy["restart_on_failure"] = true.into();
+        assert!(serde_json::from_value::<ServiceConfig>(legacy).is_err());
     }
     #[test]
     fn icon_format_comes_from_content() {

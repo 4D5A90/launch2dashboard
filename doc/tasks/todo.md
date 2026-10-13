@@ -46,3 +46,23 @@ Périmètre : refactor sans changement de comportement, suite à revue ; baselin
 
 ### Revue
 6 commits sur `refactor/split-launchd`, gates verts à chaque commit (fmt, check, test, clippy -D warnings) : 29 tests unitaires + 8 HTTP, contre 24 + 8 au départ. Revue `quality-reviewer` : aucun changement de comportement face à `main`. Elle a montré que le câblage `MacLaunchd::new` → `detect` n’était plus testé (une mutation restait verte). Un test passant par `MacLaunchd::new` le couvre maintenant, et la même mutation le fait échouer. Module `plist` renommé `definition` (collision avec la crate) ; `log_path` partagé.
+
+## Import d’un plist
+
+Story : `doc/stories/plist-import.md`.
+
+- [ ] Port `ServiceManager::parse_definition` + implémentation pure dans `definition` (nom suggéré, clés ignorées) — tests rouges d’abord.
+- [ ] Endpoint `POST /api/services/import` + stub `FakeManager` + tests HTTP (200, 400, sans header).
+- [ ] UI : bouton « Importer un .plist » dans la fenêtre d’ajout, pré-remplissage, liste des clés ignorées, erreur.
+- [ ] Gates `just check` + vérification navigateur avec un plist XML et un binaire.
+- [ ] Revue `quality-reviewer`.
+
+## Correction KeepAlive=true non éditable
+
+- [x] `restart_on_failure: bool` → `restart: never | on_failure | always` (`always` = `KeepAlive=true`), UI en liste déroulante.
+- [x] `KeepAlive=true` sans `RunAtLoad` lu comme autostart ; champ JSON inconnu refusé (`deny_unknown_fields`).
+- [x] Gates verts, 41 + 15 tests ; mutation de `check_editable` détectée.
+- [ ] Vérification navigateur (port 9090 occupé par le tunnel SSH) et déploiement sur la machine distante.
+
+### Revue
+`quality-reviewer` : bloquant `KeepAlive=true` sans `RunAtLoad` et rupture d'API silencieuse corrigés, tests ajoutés.
