@@ -56,7 +56,7 @@ fn config() -> ServiceConfig {
         working_directory: None,
         environment: BTreeMap::new(),
         autostart: true,
-        restart_on_failure: true,
+        restart: RestartPolicy::OnFailure,
     }
 }
 #[test]
@@ -325,7 +325,7 @@ fn update_stopped_does_not_restart_and_manual_running_is_restarted() {
     *f.running.lock().unwrap() = true;
     let mut c = config();
     c.autostart = false;
-    c.restart_on_failure = false;
+    c.restart = RestartPolicy::Never;
     m.update("demo", c).unwrap();
     assert!(f.calls.lock().unwrap().iter().any(|a| a[0] == "kickstart"));
 }
@@ -348,23 +348,39 @@ fn invalid_plist_does_not_hide_healthy_services() {
     );
 }
 #[test]
-fn keepalive_true_cannot_be_silently_changed() {
+fn keepalive_successful_exit_true_cannot_be_silently_changed() {
     let (_d, m, _) = fixture();
     m.create(config()).unwrap();
-    for value in [
-        Value::Boolean(true),
+    let mut d = m.read("demo").unwrap();
+    d.insert(
+        "KeepAlive".into(),
         Value::Dictionary(
             [(String::from("SuccessfulExit"), Value::Boolean(true))]
                 .into_iter()
                 .collect(),
         ),
-    ] {
-        let mut d = m.read("demo").unwrap();
-        d.insert("KeepAlive".into(), value);
-        m.write("demo", &d).unwrap();
-        assert_eq!(
-            error_kind(m.update("demo", config())),
-            ErrorKind::Validation
-        );
-    }
+    );
+    m.write("demo", &d).unwrap();
+    assert_eq!(
+        error_kind(m.update("demo", config())),
+        ErrorKind::Validation
+    );
+}
+#[test]
+fn keepalive_true_is_editable_and_kept_as_always() {
+    let (_d, m, _) = fixture();
+    m.create(config()).unwrap();
+    let mut d = m.read("demo").unwrap();
+    // launchd starts a KeepAlive=true job at load, so RunAtLoad is commonly omitted.
+    d.insert("KeepAlive".into(), Value::Boolean(true));
+    d.remove("RunAtLoad");
+    m.write("demo", &d).unwrap();
+    let mut c = m.get("demo").unwrap().config;
+    assert_eq!(c.restart, RestartPolicy::Always);
+    c.arguments = vec!["edited".into()];
+    m.update("demo", c).unwrap();
+    assert_eq!(
+        m.read("demo").unwrap().get("KeepAlive"),
+        Some(&Value::Boolean(true))
+    );
 }

@@ -27,6 +27,7 @@
   const state = (service) => ['running', 'stopped', 'starting', 'error'].includes(service.status.state) ? service.status.state : 'error';
   const endpoint = (id) => `/api/services/${encodeURIComponent(id)}`;
   const MAX_ICON_BYTES = 5 * 1024 * 1024;
+  const RESTART_LABELS = { never: 'Never', on_failure: 'On failure', always: 'Always' };
   const iconImage = (service) => service.icon ? `<img src="${escape(`${endpoint(service.config.id)}/icon?v=${encodeURIComponent(service.icon)}`)}" alt="">` : '';
   const serviceIcon = (service) => `<div class="service-icon">${iconImage(service) || serverIcon}</div>`;
   const duration = (seconds) => seconds == null ? '—' : seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`;
@@ -154,8 +155,8 @@
       updateLogs();
       for (const node of detail.querySelectorAll('.terminal')) node.scrollTop = node.scrollHeight;
     }
-    const overview = facts([['Command', config.executable, true], ['Directory', config.working_directory || 'Default'], ['Autostart', config.autostart ? 'Yes' : 'No'], ['Restart policy', config.restart_on_failure ? 'On failure' : 'Never']]);
-    const configuration = `<section class="config-block"><h3>LaunchAgent configuration</h3>${facts([['Label', `launch2dashboard.${config.id}`, true], ['Executable', config.executable, true], ['Arguments', config.arguments.join('\n') || 'None', true], ['Directory', config.working_directory || 'Default'], ['Environment', Object.entries(config.environment).map(([key, value]) => `${key}=${value}`).join('\n') || 'None', true], ['Autostart', config.autostart ? 'Yes' : 'No'], ['Restart policy', config.restart_on_failure ? 'On failure' : 'Never']])}<p><small>Environment values are visible only in this local dashboard.</small></p></section>`;
+    const overview = facts([['Command', config.executable, true], ['Directory', config.working_directory || 'Default'], ['Autostart', config.autostart ? 'Yes' : 'No'], ['Restart policy', RESTART_LABELS[config.restart]]]);
+    const configuration = `<section class="config-block"><h3>LaunchAgent configuration</h3>${facts([['Label', `launch2dashboard.${config.id}`, true], ['Executable', config.executable, true], ['Arguments', config.arguments.join('\n') || 'None', true], ['Directory', config.working_directory || 'Default'], ['Environment', Object.entries(config.environment).map(([key, value]) => `${key}=${value}`).join('\n') || 'None', true], ['Autostart', config.autostart ? 'Yes' : 'No'], ['Restart policy', RESTART_LABELS[config.restart]]])}<p><small>Environment values are visible only in this local dashboard.</small></p></section>`;
     patch(detail.querySelector('.detail-header'), `<div class="detail-heading">${serviceIcon(service)}<div><h2>${escape(config.id)}</h2>${badge(service)}</div></div><button class="icon-button" data-action="close-detail" aria-label="Close service details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`);
     patch(detail.querySelector('.detail-info'), `${service.status.error ? `<p class="error-banner">${escape(service.status.error)}</p>` : ''}${activeTab === 'config' ? configuration : activeTab === 'overview' ? overview : ''}<div class="detail-actions">${actionButtons(service)}${actionButton('edit', service)}${actionButton('delete', service)}</div>${activeTab === 'overview' ? `<div class="metrics"><div class="metric"><small>Process ID</small><strong>${escape(service.status.pid ?? '—')}</strong></div><div class="metric"><small>Uptime</small><strong>${duration(service.status.uptime_seconds)}</strong></div><div class="metric"><small>Restarts</small><strong>${escape(service.status.restart_count ?? '—')}</strong></div></div>` : ''}`);
     connect(config.id);
@@ -263,7 +264,7 @@
     previewArguments();
     form.elements.environment.value = config ? Object.entries(config.environment).map(([key, value]) => `${key}=${value}`).join('\n') : '';
     form.elements.autostart.checked = config?.autostart ?? true;
-    form.elements.restart_on_failure.checked = config?.restart_on_failure ?? false;
+    form.elements.restart.value = config?.restart ?? 'never';
     $('#form-title').textContent = id ? 'Edit service' : 'Create service';
     $('#save-service').textContent = id ? 'Save changes' : 'Create service';
     dialog.showModal();
@@ -323,9 +324,9 @@
     reader.onload = () => { if (iconChange === file) { $('#icon-preview').innerHTML = `<img src="${escape(reader.result)}" alt="">`; $('#remove-icon').hidden = false; } };
     reader.readAsDataURL(file);
   });
-  form.elements.restart_on_failure.addEventListener('change', () => { if (form.elements.restart_on_failure.checked) form.elements.autostart.checked = true; });
+  form.elements.restart.addEventListener('change', () => { if (form.elements.restart.value !== 'never') form.elements.autostart.checked = true; });
   form.elements.arguments.addEventListener('input', previewArguments);
-  form.elements.autostart.addEventListener('change', () => { if (!form.elements.autostart.checked) form.elements.restart_on_failure.checked = false; });
+  form.elements.autostart.addEventListener('change', () => { if (!form.elements.autostart.checked) form.elements.restart.value = 'never'; });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if ($('#save-service').disabled) return;
@@ -339,7 +340,7 @@
         if (Object.hasOwn(environment, key)) throw new Error(`Environment key ${key} is repeated.`);
         environment[key] = line.slice(position + 1);
       }
-      const config = { id: form.elements.id.value.trim(), executable: form.elements.executable.value.trim(), arguments: splitArguments(form.elements.arguments.value), working_directory: form.elements.working_directory.value.trim() || null, environment, autostart: form.elements.autostart.checked, restart_on_failure: form.elements.restart_on_failure.checked };
+      const config = { id: form.elements.id.value.trim(), executable: form.elements.executable.value.trim(), arguments: splitArguments(form.elements.arguments.value), working_directory: form.elements.working_directory.value.trim() || null, environment, autostart: form.elements.autostart.checked, restart: form.elements.restart.value };
       if (!config.executable.startsWith('/') || (config.working_directory && !config.working_directory.startsWith('/'))) throw new Error('Executable and working directory must be absolute paths beginning with /.');
       $('#save-service').disabled = true;
       await request(editing ? endpoint(editing) : '/api/services', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(config) });

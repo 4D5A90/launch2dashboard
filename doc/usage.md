@@ -28,10 +28,10 @@ Managed plists live in `~/Library/LaunchAgents/launch2dashboard.<id>.plist`. Cre
 - **Start** loads an unloaded service and requests a launch.
 - **Stop** unloads the job, including jobs configured to restart. It does not change its next-login autostart setting.
 - **Restart** requests a fresh process, loading the job if necessary.
-- **Restart on failure** uses `KeepAlive.SuccessfulExit=false`. macOS requires an initial launch for this policy, so automatic start must also be enabled.
+- **Restart** is `never` (`KeepAlive=false`), `on_failure` (`KeepAlive.SuccessfulExit=false`) or `always` (`KeepAlive=true`, relaunched even after a clean exit). Both restarting policies require automatic start; a plist with `KeepAlive=true` and no `RunAtLoad` is shown as autostarting, as launchd starts it at load anyway. The API rejects unknown fields, including the former `restart_on_failure`.
 - **Delete** unloads the job and removes its plist after confirmation. Existing logs are retained.
 
-Saving an edit preserves whether the service is running. A stopped service remains unloaded until Start or the next login. If applying an edit fails, launch2dashboard attempts to restore the previous plist and running state and reports whether rollback succeeded. Existing advanced `KeepAlive` policies and separate `Program` keys cannot be edited through the simplified form; they are rejected instead of being silently replaced. Unknown plist keys are otherwise retained.
+Saving an edit preserves whether the service is running. A stopped service remains unloaded until Start or the next login. If applying an edit fails, launch2dashboard attempts to restore the previous plist and running state and reports whether rollback succeeded. Other `KeepAlive` policies (conditions such as `NetworkState`, or `SuccessfulExit=true`) and separate `Program` keys cannot be edited through the simplified form; they are rejected instead of being silently replaced. Unknown plist keys are otherwise retained.
 
 Logs are tailed from `~/Library/Logs/launch2dashboard/<id>.log` and `<id>.err.log`. stdout and stderr remain separate because their files do not provide a shared timestamp order. The browser receives bounded snapshots through SSE; log rotation and truncation are picked up on the next snapshot. launch2dashboard does not rotate logs itself.
 
@@ -53,7 +53,7 @@ Mutations require `X-L2D-Request: 1`: `POST /api/services`, `PUT /api/services/{
   "working_directory": null,
   "environment": {},
   "autostart": true,
-  "restart_on_failure": false
+  "restart": "never"
 }
 ```
 

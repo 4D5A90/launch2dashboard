@@ -1,5 +1,5 @@
 use super::PREFIX;
-use crate::domain::{AppError, ErrorKind, ServiceConfig};
+use crate::domain::{AppError, ErrorKind, RestartPolicy, ServiceConfig};
 use plist::{Dictionary, Value};
 use std::{
     collections::BTreeMap,
@@ -45,20 +45,21 @@ pub(super) fn to_config(id: &str, d: &Dictionary) -> Result<ServiceConfig, AppEr
             .map(|(k, v)| Ok((k.clone(), v.as_string().ok_or_else(invalid)?.to_owned())))
             .collect::<Result<_, AppError>>()?,
     };
-    let autostart = match d.get("RunAtLoad") {
-        None => false,
-        Some(v) => v.as_boolean().ok_or_else(invalid)?,
-    };
-    let restart_on_failure = match d.get("KeepAlive") {
-        None => false,
-        Some(Value::Boolean(v)) => *v,
-        Some(v) => {
-            v.as_dictionary()
-                .and_then(|d| d.get("SuccessfulExit"))
-                .and_then(Value::as_boolean)
-                == Some(false)
+    let restart = match d.get("KeepAlive") {
+        Some(Value::Boolean(true)) => RestartPolicy::Always,
+        Some(Value::Dictionary(k))
+            if k.get("SuccessfulExit").and_then(Value::as_boolean) == Some(false) =>
+        {
+            RestartPolicy::OnFailure
         }
+        _ => RestartPolicy::Never,
     };
+    // launchd starts a KeepAlive=true job at load even without RunAtLoad.
+    let autostart = restart == RestartPolicy::Always
+        || match d.get("RunAtLoad") {
+            None => false,
+            Some(v) => v.as_boolean().ok_or_else(invalid)?,
+        };
     let working_directory = match d.get("WorkingDirectory") {
         None => None,
         Some(v) => Some(v.as_string().ok_or_else(invalid)?.to_owned()),
@@ -70,7 +71,7 @@ pub(super) fn to_config(id: &str, d: &Dictionary) -> Result<ServiceConfig, AppEr
         working_directory,
         environment,
         autostart,
-        restart_on_failure,
+        restart,
     })
 }
 /// Writes `c` over `d`, keeping keys L2D does not manage (e.g. ThrottleInterval).
@@ -111,13 +112,16 @@ pub(super) fn to_plist(
         ),
     );
     d.insert("RunAtLoad".into(), Value::Boolean(c.autostart));
-    if c.restart_on_failure {
-        let mut k = Dictionary::new();
-        k.insert("SuccessfulExit".into(), Value::Boolean(false));
-        d.insert("KeepAlive".into(), Value::Dictionary(k));
-    } else {
-        d.insert("KeepAlive".into(), Value::Boolean(false));
-    }
+    let keepalive = match c.restart {
+        RestartPolicy::Never => Value::Boolean(false),
+        RestartPolicy::OnFailure => Value::Dictionary(
+            [("SuccessfulExit".to_owned(), Value::Boolean(false))]
+                .into_iter()
+                .collect(),
+        ),
+        RestartPolicy::Always => Value::Boolean(true),
+    };
+    d.insert("KeepAlive".into(), keepalive);
     for (key, suffix) in LOG_FILES {
         d.insert(
             key.into(),
@@ -133,7 +137,7 @@ pub(super) fn to_plist(
 /// Rejects plists whose policy `to_plist` cannot represent, so an edit never drops it silently.
 pub(super) fn check_editable(d: &Dictionary) -> Result<(), AppError> {
     let supported_keepalive = match d.get("KeepAlive") {
-        None | Some(Value::Boolean(false)) => true,
+        None | Some(Value::Boolean(_)) => true,
         Some(Value::Dictionary(k)) => {
             k.len() == 1 && k.get("SuccessfulExit").and_then(Value::as_boolean) == Some(false)
         }
@@ -165,7 +169,31 @@ mod tests {
             working_directory: Some("/tmp".into()),
             environment: [("KEY".into(), "value".into())].into_iter().collect(),
             autostart: true,
-            restart_on_failure: true,
+            restart: RestartPolicy::OnFailure,
+        }
+    }
+    #[test]
+    fn each_restart_policy_maps_to_keepalive_and_back() {
+        for (restart, keepalive) in [
+            (RestartPolicy::Never, Value::Boolean(false)),
+            (
+                RestartPolicy::OnFailure,
+                Value::Dictionary(
+                    [("SuccessfulExit".to_owned(), Value::Boolean(false))]
+                        .into_iter()
+                        .collect(),
+                ),
+            ),
+            (RestartPolicy::Always, Value::Boolean(true)),
+        ] {
+            let c = ServiceConfig {
+                restart,
+                ..config()
+            };
+            let d = to_plist(&c, "Aqua", Path::new("/logs"), Dictionary::new());
+            assert_eq!(d.get("KeepAlive"), Some(&keepalive));
+            assert!(check_editable(&d).is_ok());
+            assert_eq!(to_config("demo", &d).unwrap(), c);
         }
     }
     #[test]
@@ -198,7 +226,6 @@ mod tests {
             )
         };
         for (key, value) in [
-            ("KeepAlive", Value::Boolean(true)),
             ("KeepAlive", keepalive_dict("SuccessfulExit", true)),
             ("KeepAlive", keepalive_dict("NetworkState", true)),
             ("Program", Value::String("/bin/sh".into())),

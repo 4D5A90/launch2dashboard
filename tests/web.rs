@@ -34,7 +34,7 @@ fn config(id: &str) -> ServiceConfig {
         working_directory: None,
         environment: BTreeMap::new(),
         autostart: false,
-        restart_on_failure: false,
+        restart: RestartPolicy::Never,
     }
 }
 fn service(config: ServiceConfig) -> Service {

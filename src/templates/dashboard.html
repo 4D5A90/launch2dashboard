@@ -139,11 +139,15 @@
                     <input type="checkbox" name="autostart" checked />
                     Start automatically
                 </label>
-                <label class="checkbox">
-                    <input type="checkbox" name="restart_on_failure" />
-                    Restart on failure
+                <label>
+                    Restart
+                    <select name="restart" aria-describedby="restart-help">
+                        <option value="never">Never</option>
+                        <option value="on_failure">On failure</option>
+                        <option value="always">Always</option>
+                    </select>
                 </label>
-                <small>Restart on failure also requires starting automatically.</small>
+                <small id="restart-help">Restarting also requires starting automatically. Always relaunches even after a clean exit.</small>
                 <div id="form-error" class="error-banner" role="alert" hidden></div>
             </div>
             <div class="dialog-footer">
